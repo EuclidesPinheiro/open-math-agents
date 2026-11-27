@@ -2874,12 +2874,81 @@ lemma factorial_ratio_growth {n : ℕ} (hn : 5000 ≤ n) :
       Nat.mul_le_mul_right _ (run_ratio hn)
     _ = _ := by ac_rfl
 
+private lemma factorial_run_lower (n r : ℕ) : (n+1)^r ≤ factorialRun n r := by
+  unfold factorialRun
+  rw [Finset.pow_eq_prod_const]
+  exact Finset.prod_le_prod' (fun i _ => by omega)
+
+private def baseTop (r : ℕ) : ℕ := 5029^r*167^((5000+r)/30-166)
+
+private def baseBottom (r : ℕ) : ℕ :=
+  2501^((5000+r)/2-2500)*1667^((5000+r)/3-1666)*1001^((5000+r)/5-1000)
+
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-lemma factorial_ratio_base : ∀ r : Fin 30,
+private lemma factorial_ratio_at_5000 :
+    factorialNumerator 5000*100^5000*100000000 ≤ factorialDenominator 5000*253^5000 := by
+  decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 1500000 in
+private lemma base_numerator_upper (r : ℕ) (hr : r < 30) :
+    factorialNumerator (5000+r) ≤ factorialNumerator 5000 * baseTop r := by
+  let d := (5000+r)/30-166
+  have hd : (5000+r)/30 = 166+d := by dsimp [d]; omega
+  have hd' : 166+d ≤ 167 := by omega
+  have h1 := (factorial_run_upper 5000 r).trans
+    (pow_le_pow_left' (by omega : 5000+r ≤ 5029) r)
+  have h2 := (factorial_run_upper 166 d).trans (pow_le_pow_left' hd' d)
+  unfold factorialNumerator baseTop
+  change (5000+r).factorial*((5000+r)/30).factorial ≤
+    (5000:ℕ).factorial * (166:ℕ).factorial * (5029^r * 167^d)
+  rw [hd, factorial_extend 5000 r, factorial_extend 166 d]
+  calc
+    _ = ((5000:ℕ).factorial*(166:ℕ).factorial)*(factorialRun 5000 r*factorialRun 166 d) := by ac_rfl
+    _ ≤ _ := Nat.mul_le_mul_left _ (Nat.mul_le_mul h1 h2)
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 1500000 in
+private lemma base_denominator_lower (r : ℕ) :
+    factorialDenominator 5000 * baseBottom r ≤ factorialDenominator (5000+r) := by
+  let d₂ := (5000+r)/2-2500
+  let d₃ := (5000+r)/3-1666
+  let d₅ := (5000+r)/5-1000
+  have h₂ : (5000+r)/2 = 2500+d₂ := by dsimp [d₂]; omega
+  have h₃ : (5000+r)/3 = 1666+d₃ := by dsimp [d₃]; omega
+  have h₅ : (5000+r)/5 = 1000+d₅ := by dsimp [d₅]; omega
+  unfold factorialDenominator baseBottom
+  change (((2500:ℕ).factorial*(1666:ℕ).factorial)*(1000:ℕ).factorial)*(2501^d₂*1667^d₃*1001^d₅) ≤
+    ((5000+r)/2).factorial*((5000+r)/3).factorial*((5000+r)/5).factorial
+  rw [h₂, h₃, h₅, factorial_extend 2500 d₂, factorial_extend 1666 d₃, factorial_extend 1000 d₅]
+  calc
+    _ ≤ (((2500:ℕ).factorial*(1666:ℕ).factorial)*(1000:ℕ).factorial)*(factorialRun 2500 d₂*factorialRun 1666 d₃*factorialRun 1000 d₅) :=
+      Nat.mul_le_mul_left _ (Nat.mul_le_mul (Nat.mul_le_mul (factorial_run_lower 2500 d₂)
+        (factorial_run_lower 1666 d₃)) (factorial_run_lower 1000 d₅))
+    _ = _ := by ac_rfl
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 1500000 in
+lemma factorial_ratio_base (r : Fin 30) :
     factorialNumerator (5000+r.val)*100^(5000+r.val) ≤
       factorialDenominator (5000+r.val)*253^(5000+r.val) := by
-  decide +kernel
+  have hTable : ∀ j : Fin 30, baseTop j.val*100^j.val ≤ baseBottom j.val*100000000*253^j.val := by
+    decide +kernel
+  have hA := base_numerator_upper r.val r.isLt
+  have hB := base_denominator_lower r.val
+  have hRow := hTable r
+  rw [pow_add 100,pow_add 253]
+  calc
+    _ ≤ (factorialNumerator 5000*baseTop r.val)*(100^5000*100^r.val) := Nat.mul_le_mul_right _ hA
+    _ = (factorialNumerator 5000*100^5000)*(baseTop r.val*100^r.val) := by ac_rfl
+    _ ≤ (factorialNumerator 5000*100^5000)*(baseBottom r.val*100000000*253^r.val) :=
+      Nat.mul_le_mul_left _ hRow
+    _ = (factorialNumerator 5000*100^5000*100000000)*(baseBottom r.val*253^r.val) := by ac_rfl
+    _ ≤ (factorialDenominator 5000*253^5000)*(baseBottom r.val*253^r.val) :=
+      Nat.mul_le_mul_right _ factorial_ratio_at_5000
+    _ = (factorialDenominator 5000*baseBottom r.val)*(253^5000*253^r.val) := by ac_rfl
+    _ ≤ _ := Nat.mul_le_mul_right _ hB
 
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 1500000 in
@@ -3196,7 +3265,7 @@ lemma height_sum_bound_split (k : ℕ) :
           (Nat.le_div_iff_mul_le (by positivity)).2 (by simpa only [mul_comm] using hPow.le)
         exact mem_filter.mpr ⟨mem_range.mpr (by omega), hp'⟩
       · rw [filter_sum_one]
-        exact card_filter_le _ _
+        exact card_filter_le (s := P) _
 
 lemma height_sum_bound (k : ℕ) :
     (∑ p ∈ (k-1).primesLE, dyadicHeight k p) ≤
@@ -3707,7 +3776,7 @@ lemma primes_le_candidates (n : ℕ) : n.primesLE.card ≤ (candidatePrefix (n+1
 lemma wheel_prime_count_upper (n : ℕ) : n.primesLE.card ≤ 211+48*((n+1)/210+1) := by
   have hBase : 211.primeCounting' ≤ 211 := by
     rw [← Nat.primesBelow_card_eq_primeCounting',Nat.primesBelow_eq_filter_range]
-    exact (card_filter_le _ _).trans_eq (card_range _)
+    exact (card_filter_le (s := range 211) Nat.Prime).trans_eq (card_range _)
   by_cases h : 211 ≤ n+1
   · have hAdd := Nat.primeCounting'_add_le (a := 210) (k := 211) (by decide) (by decide) (n+1-211)
     have hTotient : Nat.totient 210 = 48 := by decide

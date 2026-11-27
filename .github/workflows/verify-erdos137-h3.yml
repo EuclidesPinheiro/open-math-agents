@@ -47,7 +47,7 @@ jobs:
           path: |
             ~/.elan
             formal-conjectures/.lake
-      - name: Check the exact OMA odd-prime submission
+      - name: Diagnose the candidate Lean proof
         if: ${{ success() || steps.odd.outcome == 'failure' }}
         shell: bash
         run: |
@@ -56,7 +56,17 @@ jobs:
           for reduction in verification/Erdos137*.R1.lean; do cp "$reduction" reductions/; done
           proof=proofs/Erdos137.erdos_137.variants.perfect_power.R1.H3.R1.H2.lean
           cp verification/H3_odd_submission.lean "$proof"
+          sed -i -E 's/^set_option maxHeartbeats (0|1500000|1000000) in/set_option maxHeartbeats 350000 in/; s/decide \+kernel/decide/g' "$proof"
+          python3 -I tools/lint.py "$proof" data/catalog.json
+          mkdir -p formal-conjectures/OMAReductions
+          for reduction in verification/Erdos137*.R1.lean; do
+            module=$(basename "$reduction" .lean | sed 's/[^A-Za-z0-9]/_/g')
+            cp "$reduction" "formal-conjectures/OMAReductions/R_${module}.lean"
+          done
+          cd formal-conjectures
+          grep -q 'name = "OMAReductions"' lakefile.toml || printf '\n[[lean_lib]]\nname = "OMAReductions"\nglobs = ["OMAReductions.+"]\n' >> lakefile.toml
+          lake build OMAReductions.R_Erdos137_erdos_137_variants_perfect_power_R1_H3_R1
           rc=0
-          bash tools/check.sh "$proof" "${RUNNER_TEMP}/erdos137-verdict.json" || rc=$?
-          python3 -m json.tool "${RUNNER_TEMP}/erdos137-verdict.json"
+          timeout -k 5 180 lake env lean ../"$proof" > /tmp/erdos137-bounded.log 2>&1 || rc=$?
+          cat /tmp/erdos137-bounded.log
           exit "$rc"
