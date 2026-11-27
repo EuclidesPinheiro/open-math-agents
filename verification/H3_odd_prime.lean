@@ -1,5 +1,6 @@
 import FormalConjectures.ErdosProblems.«137»
 import Mathlib.Data.Nat.Choose.Factorization
+import Mathlib.Data.Finset.Powerset
 
 /-! Arithmetic lemmas for the odd prime exponent case of Erdős–Selfridge. -/
 
@@ -759,5 +760,105 @@ theorem restricted_prod_dvd_factorial :
       exact hpK (hSupport t (hSub ht) p (Nat.mem_primeFactors.mpr ⟨hp, hd, hA t ht⟩))
     rw [Finset.sum_eq_zero hZ]
     exact Nat.zero_le _
+
+lemma ordered_pair_eq_of_insert_eq {a b c d : ℕ} (hab : a < b) (hcd : c < d)
+    (heq : ({a,b} : Finset ℕ) = {c,d}) : a = c ∧ b = d := by
+  have ha : a = c ∨ a = d := by
+    have hm : a ∈ ({c,d} : Finset ℕ) := heq ▸ (by simp : a ∈ ({a,b} : Finset ℕ))
+    simpa only [mem_insert, mem_singleton] using hm
+  have hb : b = c ∨ b = d := by
+    have hm : b ∈ ({c,d} : Finset ℕ) := heq ▸ (by simp : b ∈ ({a,b} : Finset ℕ))
+    simpa only [mem_insert, mem_singleton] using hm
+  omega
+
+-- Count one representative per left factor, then inject the other edges
+-- into the unordered pairs of distinct right factors.
+theorem factor_cover_card_of_distinct_products (S U V : Finset ℕ)
+    (hCover : ∀ t ∈ S, ∃ u ∈ U, ∃ v ∈ V, t = u*v)
+    (hSidon : ∀ a ∈ S, ∀ b ∈ S, ∀ c ∈ S, ∀ d ∈ S, a*b = c*d →
+      (a = c ∧ b = d) ∨ (a = d ∧ b = c)) :
+    S.card ≤ U.card + V.card.choose 2 := by
+  classical
+  have hSelect : ∀ t : ℕ, ∃ w : ℕ × ℕ,
+      t ∈ S → w.1 ∈ U ∧ w.2 ∈ V ∧ t = w.1*w.2 := by
+    intro t
+    by_cases ht : t ∈ S
+    · obtain ⟨u, hu, v, hv, he⟩ := hCover t ht
+      exact ⟨(u,v), fun _ => ⟨hu,hv,he⟩⟩
+    · exact ⟨(0,0), fun h => (ht h).elim⟩
+  choose f hf using hSelect
+  let u := fun t : ℕ => (f t).1
+  let v := fun t : ℕ => (f t).2
+  have hAnchor : ∀ i : ℕ, ∃ r : ℕ, i ∈ S.image u →
+      r ∈ S ∧ u r = i ∧ ∀ t ∈ S, u t = i → v r ≤ v t := by
+    intro i
+    by_cases hi : i ∈ S.image u
+    · obtain ⟨t, ht, hti⟩ := mem_image.mp hi
+      obtain ⟨r, hr, hMin⟩ := (S.filter (fun q => u q = i)).exists_min_image v
+        ⟨t, mem_filter.mpr ⟨ht, hti⟩⟩
+      exact ⟨r, fun _ => ⟨(mem_filter.mp hr).1, (mem_filter.mp hr).2,
+        fun q hq hqi => hMin q (mem_filter.mpr ⟨hq, hqi⟩)⟩⟩
+    · exact ⟨0, fun h => (hi h).elim⟩
+  choose anchor hanchor using hAnchor
+  have hA (t : ℕ) (ht : t ∈ S) :
+      anchor (u t) ∈ S ∧ u (anchor (u t)) = u t ∧ v (anchor (u t)) ≤ v t := by
+    obtain ⟨h1,h2,h3⟩ := hanchor (u t) (mem_image_of_mem u ht)
+    exact ⟨h1,h2,h3 t ht rfl⟩
+  have hValue (t : ℕ) (ht : t ∈ S) : t = u t * v t := (hf t ht).2.2
+  have hAValue (t : ℕ) (ht : t ∈ S) : anchor (u t) = u t * v (anchor (u t)) := by
+    calc
+      _ = u (anchor (u t)) * v (anchor (u t)) := hValue _ (hA t ht).1
+      _ = _ := by rw [(hA t ht).2.1]
+  let first := S.filter fun t => t = anchor (u t)
+  let rest := S.filter fun t => t ≠ anchor (u t)
+  have hFirst : first.card ≤ U.card := by
+    apply Finset.card_le_card_of_injOn u
+    · intro t ht
+      exact (hf t (mem_filter.mp ht).1).1
+    · intro a ha b hb h
+      have ha' := (mem_filter.mp ha).2
+      have hb' := (mem_filter.mp hb).2
+      change u a = u b at h
+      exact ha'.trans ((congrArg anchor h).trans hb'.symm)
+  have hStrict (t : ℕ) (ht : t ∈ rest) : v (anchor (u t)) < v t := by
+    obtain ⟨htS, htNe⟩ := mem_filter.mp ht
+    apply lt_of_le_of_ne (hA t htS).2.2
+    intro hv
+    apply htNe
+    exact (hValue t htS).trans ((congrArg (fun w => u t * w) hv.symm).trans (hAValue t htS).symm)
+  let pair := fun t : ℕ => ({v (anchor (u t)), v t} : Finset ℕ)
+  have hRest : rest.card ≤ (V.powersetCard 2).card := by
+    apply Finset.card_le_card_of_injOn pair
+    · intro t ht
+      have htS := (mem_filter.mp ht).1
+      apply mem_powersetCard.mpr
+      change ({v (anchor (u t)), v t} : Finset ℕ) ⊆ V ∧
+        ({v (anchor (u t)), v t} : Finset ℕ).card = 2
+      refine ⟨?_, by simp [(hStrict t ht).ne]⟩
+      intro x hx
+      simp only [mem_insert, mem_singleton] at hx
+      rcases hx with rfl | rfl
+      · exact (hf _ (hA t htS).1).2.1
+      · exact (hf _ htS).2.1
+    · intro a ha b hb he
+      have haS := (mem_filter.mp ha).1
+      have hbS := (mem_filter.mp hb).1
+      have haNe := (mem_filter.mp ha).2
+      have hKeys := ordered_pair_eq_of_insert_eq (hStrict a ha) (hStrict b hb) he
+      have hCross : a * anchor (u b) = b * anchor (u a) := by
+        calc
+          _ = (u a*v a) * (u b*v (anchor (u b))) :=
+            congrArg₂ (· * ·) (hValue a haS) (hAValue b hbS)
+          _ = (u b*v b) * (u a*v (anchor (u a))) := by
+            rw [hKeys.1, hKeys.2]
+            ac_rfl
+          _ = _ := (congrArg₂ (· * ·) (hValue b hbS) (hAValue a haS)).symm
+      rcases hSidon a haS _ (hA b hbS).1 b hbS _ (hA a haS).1 hCross with h | h
+      · exact h.1
+      · exact (haNe h.1).elim
+  have hCard : first.card + rest.card = S.card :=
+    card_filter_add_card_filter_not (s := S) (fun t => t = anchor (u t))
+  rw [Finset.card_powersetCard] at hRest
+  exact hCard ▸ Nat.add_le_add hFirst hRest
 
 end Erdos137PerfectPower
