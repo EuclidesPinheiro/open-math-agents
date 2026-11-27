@@ -1039,7 +1039,7 @@ private structure FactorCoverRow where
   deriving DecidableEq
 
 private def rightFactors (B L : ℕ) : Finset ℕ :=
-  (Ioc 0 B).filter fun t => ∀ p ∈ t.primeFactors, p ≤ L
+  (Ioc 0 B).filter fun t => ∀ p ∈ range (B+1), p.Prime → p ∣ t → p ≤ L
 
 private def leftFactorsForRow (row : FactorCoverRow) (x : ℕ) : Finset ℕ :=
   (coprimePrefix row.period (x/(row.prime*row.minDiv))).image (row.prime*·)
@@ -1115,6 +1115,7 @@ private lemma left_factor_count (row : FactorCoverRow) (x : ℕ) (hRow : rowVali
     have hmin : (row.minDiv : ℚ) ≠ 0 := by exact_mod_cast hv.ne'
     unfold rowDensity rowError
     dsimp [d]
+    push_cast
     field_simp [hperiod, hprime, hmin]
     <;> ring
   rw [ht] at hBound
@@ -1132,10 +1133,11 @@ private lemma graph_density_from_rows (rows : Finset FactorCoverRow)
       (a=c ∧ b=d) ∨ (a=d ∧ b=c))
     (hRows : ∀ row ∈ rows, rowValid row)
     (hBase : ∃ row ∈ rows, row.prime = 1 ∧ row.minDiv = 1 ∧
-      ∀ p ∈ row.period.primeFactors, p ≤ L)
+      ∀ p ∈ range (row.period+1), p.Prime → p ∣ row.period → p ≤ L)
     (hNext : ∀ p ∈ (range (L+1)).filter Nat.Prime, ∃ row ∈ rows, row.prime = p ∧
-      (∀ q ∈ row.period.primeFactors, q < p) ∧
-      ∀ v ∈ rightFactors B L, B < v*p → (∀ q ∈ v.primeFactors, q ≤ p) → row.minDiv ≤ v)
+      (∀ q ∈ range (row.period+1), q.Prime → q ∣ row.period → q < p) ∧
+      ∀ v ∈ rightFactors B L, B < v*p →
+        (∀ q ∈ range (B+1), q.Prime → q ∣ v → q ≤ p) → row.minDiv ≤ v)
     (hDensity : (∑ row ∈ rows, rowDensity row) ≤ (A:ℚ)/C)
     (hError : ((rightFactors B L).card.choose 2 : ℚ) +
       (∑ row ∈ rows, rowError row) ≤ E) :
@@ -1146,7 +1148,8 @@ private lemma graph_density_from_rows (rows : Finset FactorCoverRow)
   have hCover : ∀ t ∈ S, ∃ u ∈ U, ∃ v ∈ V, t = u*v := by
     intro t ht
     obtain ⟨u,v,he,hu,hv,hvB,hSupport,hEnd⟩ := greedy_small_factor B L t hB (hS t ht).1
-    have hvV : v ∈ V := mem_filter.mpr ⟨mem_Ioc.mpr ⟨hv,hvB⟩,hSupport⟩
+    have hvV : v ∈ V := mem_filter.mpr ⟨mem_Ioc.mpr ⟨hv,hvB⟩,fun p _ hp hd =>
+      hSupport p (Nat.mem_primeFactors.mpr ⟨hp,hd,hv.ne'⟩)⟩
     have hSize : u*v ≤ x := he ▸ (hS t ht).2
     refine ⟨u, ?_, v,hvV,he⟩
     rcases hEnd with hu1 | hLarge | ⟨hOver,hSorted⟩
@@ -1158,7 +1161,8 @@ private lemma graph_density_from_rows (rows : Finset FactorCoverRow)
         apply Nat.Coprime.symm
         apply Nat.coprime_of_dvd
         intro p hp hd huD
-        have hP := hbFactors p (Nat.mem_primeFactors.mpr ⟨hp,hd,(hRows base hbRows).2.2.1.ne'⟩)
+        have hBound := Nat.le_of_dvd (hRows base hbRows).2.2.1 hd
+        have hP := hbFactors p (mem_range.mpr (by omega)) hp hd
         have hMin := Nat.minFac_le_of_dvd hp.two_le huD
         omega
       exact mem_biUnion.mpr ⟨base,hbRows,left_factor_mem (hRows base hbRows) hu
@@ -1175,7 +1179,8 @@ private lemma graph_density_from_rows (rows : Finset FactorCoverRow)
             apply Nat.Coprime.symm
             apply Nat.coprime_of_dvd
             intro r hr hd huD
-            have hP := hbFactors r (Nat.mem_primeFactors.mpr ⟨hr,hd,(hRows base hbRows).2.2.1.ne'⟩)
+            have hBound := Nat.le_of_dvd (hRows base hbRows).2.2.1 hd
+            have hP := hbFactors r (mem_range.mpr (by omega)) hr hd
             have hMin : p ≤ r := Nat.minFac_le_of_dvd hr.two_le huD
             omega
           exact mem_biUnion.mpr ⟨base,hbRows,left_factor_mem (hRows base hbRows) hu
@@ -1187,11 +1192,13 @@ private lemma graph_density_from_rows (rows : Finset FactorCoverRow)
             apply Nat.Coprime.symm
             apply Nat.coprime_of_dvd
             intro r hr hd hrU
-            have hP := hrFactors r (Nat.mem_primeFactors.mpr ⟨hr,hd,(hRows row hrRows).2.2.1.ne'⟩)
+            have hBound := Nat.le_of_dvd (hRows row hrRows).2.2.1 hd
+            have hP := hrFactors r (mem_range.mpr (by omega)) hr hd
             have hMin : p ≤ r := Nat.minFac_le_of_dvd hr.two_le (hrU.trans (Nat.div_dvd_of_dvd hPDvd))
             omega
           exact mem_biUnion.mpr ⟨row,hrRows,left_factor_mem (hRows row hrRows) hu
-            (hrMin v hvV hOver hSorted) hSize hPDvd hCop⟩
+            (hrMin v hvV hOver (fun q _ hq hd => hSorted q (Nat.mem_primeFactors.mpr ⟨hq,hd,hv.ne'⟩)))
+            hSize hPDvd hCop⟩
   have hGraph := factor_cover_card_of_distinct_products S U V hCover hSidon
   have hCards : U.card ≤ ∑ row ∈ rows, (leftFactorsForRow row x).card := card_biUnion_le
   have hCombined : (S.card : ℚ) ≤
@@ -1201,7 +1208,7 @@ private lemma graph_density_from_rows (rows : Finset FactorCoverRow)
       _ ≤ (∑ row ∈ rows, ((leftFactorsForRow row x).card : ℚ)) + V.card.choose 2 := by
         exact_mod_cast Nat.add_le_add_right hCards (V.card.choose 2)
       _ ≤ (∑ row ∈ rows, (rowDensity row*x+rowError row))+V.card.choose 2 :=
-        add_le_add_right (sum_le_sum (fun row hrow => left_factor_count row x (hRows row hrow))) _
+        add_le_add (sum_le_sum (fun row hrow => left_factor_count row x (hRows row hrow))) le_rfl
       _ = _ := by rw [Finset.sum_add_distrib, Finset.sum_mul]; ac_rfl
   have hAll := hCombined.trans (add_le_add
     (mul_le_mul_of_nonneg_right hDensity (by positivity : 0 ≤ (x:ℚ))) hError)
@@ -1238,10 +1245,24 @@ theorem distinct_products_rank_bounds (S : Finset ℕ) (x : ℕ)
     (hSidon : ∀ a ∈ S, ∀ b ∈ S, ∀ c ∈ S, ∀ d ∈ S, a*b = c*d →
       (a=c ∧ b=d) ∨ (a=d ∧ b=c)) :
     1260*S.card ≤ 353*x+1260*304 ∧ 21701*S.card ≤ 5000*x+21701*1492 := by
+  have h36V : (rightFactors 36 7).card = 25 := by decide
+  have h100V : (rightFactors 100 11).card = 55 := by decide
+  have h36Density : (∑ row ∈ rows36, rowDensity row) ≤ (353:ℚ)/1260 := by
+    norm_num [rows36, rowDensity, Finset.sum_insert]
+  have h100Density : (∑ row ∈ rows100, rowDensity row) ≤ (5000:ℚ)/21701 := by
+    norm_num [rows100, rowDensity, Finset.sum_insert]
+  have h36Error : ((rightFactors 36 7).card.choose 2 : ℚ) +
+      (∑ row ∈ rows36, rowError row) ≤ 304 := by
+    rw [h36V]
+    norm_num [rows36, rowError, Finset.sum_insert, show (25:ℕ).choose 2 = 300 by decide]
+  have h100Error : ((rightFactors 100 11).card.choose 2 : ℚ) +
+      (∑ row ∈ rows100, rowError row) ≤ 1492 := by
+    rw [h100V]
+    norm_num [rows100, rowError, Finset.sum_insert, show (55:ℕ).choose 2 = 1485 by decide]
   exact ⟨graph_density_from_rows rows36 36 7 x 353 1260 304 S (by decide) (by decide)
-      hS hSidon rows36_valid (by decide) (by decide) (by decide) (by decide),
+      hS hSidon rows36_valid (by decide) (by decide) h36Density h36Error,
     graph_density_from_rows rows100 100 11 x 5000 21701 1492 S (by decide) (by decide)
-      hS hSidon rows100_valid (by decide) (by decide) (by decide) (by decide)⟩
+      hS hSidon rows100_valid (by decide) (by decide) h100Density h100Error⟩
 
 def coefficientRankLower (i : ℕ) : ℕ :=
   max i (max ((1260*(i-304)+352)/353) ((21701*(i-1492)+4999)/5000))
