@@ -286,7 +286,7 @@ private lemma prime_in_wheel_block {lo hi q r : ℕ} (residues : List ℕ) (code
         rcases (Nat.dvd_prime hp).mp hD with h | h <;> omega
       simp [possiblePrimesInBlock,hlo,hhi,hNo]
     · have hTail := ih (code/1024) hr
-      unfold possiblePrimesInBlock
+      simp only [possiblePrimesInBlock]
       split
       · exact List.mem_cons_of_mem _ hTail
       · exact hTail
@@ -328,8 +328,12 @@ private lemma prime_interval_le_witness_count {lo hi : ℕ} (codes : List ℕ) (
   obtain ⟨hnI,hp⟩ := mem_filter.mp hn
   obtain ⟨hlo,hhi⟩ := mem_Ico.mp hnI
   have hCop : n.Coprime 210 := by
-    rcases prime_is_fermat_candidate hp with h | h | h | h | h <;> try omega
-    exact h.2.1
+    rcases prime_is_fermat_candidate hp with h | h | h | h | h
+    · omega
+    · omega
+    · omega
+    · omega
+    · exact h.2.1
   have hR : n%210 ∈ wheelResidues := by
     rw [wheel_residues_exact,List.mem_filter,List.mem_range,decide_eq_true_eq]
     refine ⟨Nat.mod_lt _ (by decide),?_⟩
@@ -403,7 +407,7 @@ lemma count_from_intervals_valid (ts : List ℕ) (start stop available n : ℕ) 
     (hStart : 8 ≤ start) (hn : n ≤ stop+1) (hP : start.primesBelow.card ≤ available)
     (hRows : RankIntervals ts start stop available rows) :
     n.primesBelow.card ≤ countFromIntervals n start available rows := by
-  have hMono : Monotone (fun t => t.primesBelow.card) := fun a b hab =>
+  have hMono : Monotone (fun t : ℕ => t.primesBelow.card) := fun a b hab =>
     card_le_card (Nat.primesBelow_mono hab)
   induction rows generalizing start available with
   | nil =>
