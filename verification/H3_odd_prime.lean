@@ -318,15 +318,157 @@ lemma factorization_le_of_dvd_difference {p i j : ℕ} (hp : p.Prime)
   have hRight : p ^ e ∣ j := (hp.pow_dvd_iff_le_factorization hj).2 hMax
   exact (hp.pow_dvd_iff_le_factorization hDiff).1 (Nat.dvd_sub hRight hLeft)
 
--- The deletion lemma is an independent third obligation. The final counting
--- argument also needs the stronger separation of reduced products of
--- multisets of size less than l from Lemma 1 of Erdős–Selfridge.
-def restricted_prod_dvd_factorial : Prop :=
+lemma prod_Ioc_zero_eq_factorial (m : ℕ) : (∏ d ∈ Ioc 0 m, d) = m.factorial := by
+  induction m with
+  | zero => simp
+  | succ m ih =>
+    have hSet : Ioc 0 (m + 1) = insert (m + 1) (Ioc 0 m) := by
+      ext d
+      simp only [mem_Ioc, mem_insert]
+      omega
+    rw [hSet, Finset.prod_insert (by simp), ih, Nat.factorial_succ]
+
+lemma interval_distances_dvd_factorial {n k m : ℕ} (hm : m ∈ Ioc n (n + k)) :
+    (∏ t ∈ (Ioc n (n + k)).erase m, (m - t) + (t - m)) ∣ (k - 1).factorial := by
+  have hmB := mem_Ioc.mp hm
+  have hSplit : (Ioc n (n + k)).erase m = Ioo n m ∪ Ioc m (n + k) := by
+    ext t
+    simp only [mem_erase, mem_Ioc, mem_Ioo, mem_union]
+    omega
+  have hDisj : Disjoint (Ioo n m) (Ioc m (n + k)) := by
+    rw [Finset.disjoint_left]
+    intro t hl hr
+    exact (not_lt_of_ge (mem_Ioo.mp hl).2.le) (mem_Ioc.mp hr).1
+  have hLeft : (∏ t ∈ Ioo n m, (m-t)+(t-m)) = (m-n-1).factorial := by
+    have hi : Set.InjOn (fun t : ℕ => m-t) ↑(Ioo n m) := by
+      intro s hs t ht he
+      have hS := mem_Ioo.mp hs
+      have hT := mem_Ioo.mp ht
+      change m-s = m-t at he
+      omega
+    have hImage : (Ioo n m).image (fun t => m-t) = Ioc 0 (m-n-1) := by
+      ext d
+      simp only [mem_image, mem_Ioo, mem_Ioc]
+      constructor
+      · rintro ⟨t, ht, rfl⟩
+        omega
+      · intro hd
+        exact ⟨m-d, by omega, by omega⟩
+    calc
+      _ = ∏ t ∈ Ioo n m, m-t := by
+        refine Finset.prod_congr rfl (fun t ht => ?_)
+        have := (mem_Ioo.mp ht).2
+        omega
+      _ = ∏ d ∈ (Ioo n m).image (fun t => m-t), d := (Finset.prod_image hi).symm
+      _ = _ := by rw [hImage, prod_Ioc_zero_eq_factorial]
+  have hRight : (∏ t ∈ Ioc m (n+k), (m-t)+(t-m)) = (n+k-m).factorial := by
+    have hi : Set.InjOn (fun t : ℕ => t-m) ↑(Ioc m (n+k)) := by
+      intro s hs t ht he
+      have hS := mem_Ioc.mp hs
+      have hT := mem_Ioc.mp ht
+      change s-m = t-m at he
+      omega
+    have hImage : (Ioc m (n+k)).image (fun t => t-m) = Ioc 0 (n+k-m) := by
+      ext d
+      simp only [mem_image, mem_Ioc]
+      constructor
+      · rintro ⟨t, ht, rfl⟩
+        omega
+      · intro hd
+        exact ⟨m+d, by omega, by omega⟩
+    calc
+      _ = ∏ t ∈ Ioc m (n+k), t-m := by
+        refine Finset.prod_congr rfl (fun t ht => ?_)
+        have := (mem_Ioc.mp ht).1
+        omega
+      _ = ∏ d ∈ (Ioc m (n+k)).image (fun t => t-m), d := (Finset.prod_image hi).symm
+      _ = _ := by rw [hImage, prod_Ioc_zero_eq_factorial]
+  rw [hSplit, Finset.prod_union hDisj, hLeft, hRight,
+    show k-1 = (m-n-1)+(n+k-m) by omega]
+  exact Nat.factorial_mul_factorial_dvd_factorial_add _ _
+
+theorem restricted_prod_dvd_factorial :
   ∀ (n k : ℕ) (a : ℕ → ℕ), 0 < k →
     (∀ t ∈ Ioc n (n + k), a t ∣ t) →
     (∀ t ∈ Ioc n (n + k), ∀ p ∈ (a t).primeFactors, p < k) →
     ∃ s ⊆ Ioc n (n + k),
       k - ((range k).filter Nat.Prime).card ≤ s.card ∧
-      (∏ t ∈ s, a t) ∣ (k - 1).factorial
+      (∏ t ∈ s, a t) ∣ (k - 1).factorial := by
+  intro n k a hk hDvd hSupport
+  let R := Ioc n (n+k)
+  let P := (range k).filter Nat.Prime
+  have hR : R.Nonempty := ⟨n+1, mem_Ioc.mpr ⟨by omega, by omega⟩⟩
+  choose m hm hMax using fun p : ℕ =>
+    Finset.exists_max_image R (fun t => t.factorization p) hR
+  let removed := P.image m
+  let S := R \ removed
+  have hSub : S ⊆ R := Finset.sdiff_subset
+  have hRemoved : removed ⊆ R := by
+    intro t ht
+    obtain ⟨p, _, rfl⟩ := mem_image.mp ht
+    exact hm p
+  have hCard : S.card + removed.card = k := by
+    have h := Finset.card_sdiff_add_card_eq_card hRemoved
+    change S.card + removed.card = R.card at h
+    simpa [R] using h
+  have hPrimeCard : removed.card ≤ P.card := Finset.card_image_le
+  refine ⟨S, hSub, by omega, ?_⟩
+  have hPos (t : ℕ) (ht : t ∈ R) : t ≠ 0 := by
+    have h := (mem_Ioc.mp ht).1
+    omega
+  have hA (t : ℕ) (ht : t ∈ S) : a t ≠ 0 := by
+    intro hz
+    have hd := hDvd t (hSub ht)
+    rw [hz] at hd
+    exact hPos t (hSub ht) (Nat.eq_zero_of_zero_dvd hd)
+  have hAProd : (∏ t ∈ S, a t) ≠ 0 := Finset.prod_ne_zero_iff.mpr hA
+  apply (Nat.factorization_prime_le_iff_dvd hAProd (Nat.factorial_ne_zero _)).1
+  intro p hp
+  rw [Nat.factorization_prod hA, Finsupp.finsetSum_apply]
+  by_cases hpK : p < k
+  · have hpP : p ∈ P := mem_filter.mpr ⟨mem_range.mpr hpK, hp⟩
+    have hSErase : S ⊆ R.erase (m p) := by
+      intro t ht
+      refine mem_erase.mpr ⟨?_, hSub ht⟩
+      rintro rfl
+      exact (mem_sdiff.mp ht).2 (mem_image.mpr ⟨p, hpP, rfl⟩)
+    let d := fun t : ℕ => (m p-t)+(t-m p)
+    have hD0 (t : ℕ) (ht : t ∈ R.erase (m p)) : d t ≠ 0 := by
+      have hNe := (mem_erase.mp ht).1
+      dsimp [d]
+      omega
+    have hDProd0 : (∏ t ∈ R.erase (m p), d t) ≠ 0 := Finset.prod_ne_zero_iff.mpr hD0
+    have hProd : (∏ t ∈ R.erase (m p), d t) ∣ (k-1).factorial :=
+      interval_distances_dvd_factorial (hm p)
+    have hProdVal := (Nat.factorization_le_iff_dvd hDProd0 (Nat.factorial_ne_zero _)).2 hProd p
+    rw [Nat.factorization_prod hD0, Finsupp.finsetSum_apply] at hProdVal
+    calc
+      _ ≤ ∑ t ∈ S, (d t).factorization p := by
+        apply Finset.sum_le_sum
+        intro t ht
+        have htR := hSub ht
+        have hCoeff := (Nat.factorization_le_iff_dvd (hA t ht) (hPos t htR)).2 (hDvd t htR) p
+        have hM := hMax p t htR
+        rcases lt_or_gt_of_ne (mem_erase.mp (hSErase ht)).1 with hlt | hgt
+        · exact hCoeff.trans (by
+            simpa only [d, Nat.sub_eq_zero_of_le hlt.le, Nat.add_zero] using
+              factorization_le_of_dvd_difference hp (hPos t htR) hlt hM)
+        · have hPower : p ^ t.factorization p ∣ t :=
+            (hp.pow_dvd_iff_le_factorization (hPos t htR)).2 le_rfl
+          have hPowerM : p ^ t.factorization p ∣ m p :=
+            (hp.pow_dvd_iff_le_factorization (hPos _ (hm p))).2 hM
+          have hDiff := (hp.pow_dvd_iff_le_factorization (show t-m p ≠ 0 by omega)).1
+            (Nat.dvd_sub hPower hPowerM)
+          exact hCoeff.trans (by
+            simpa only [d, Nat.sub_eq_zero_of_le hgt.le, Nat.zero_add] using hDiff)
+      _ ≤ ∑ t ∈ R.erase (m p), (d t).factorization p :=
+        Finset.sum_le_sum_of_subset_of_nonneg hSErase (fun _ _ _ => Nat.zero_le _)
+      _ ≤ _ := hProdVal
+  · have hZ (t : ℕ) (ht : t ∈ S) : (a t).factorization p = 0 := by
+      apply Nat.factorization_eq_zero_of_not_dvd
+      intro hd
+      exact hpK (hSupport t (hSub ht) p (Nat.mem_primeFactors.mpr ⟨hp, hd, hA t ht⟩))
+    rw [Finset.sum_eq_zero hZ]
+    exact Nat.zero_le _
 
 end Erdos137PerfectPower
