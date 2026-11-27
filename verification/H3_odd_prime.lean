@@ -34,7 +34,7 @@ lemma sylvester_schur_lower_bound {k n l p t : ℕ}
   omega
 
 lemma large_prime_factorization_single {k n p t : ℕ}
-    (hkp : k ≤ p) (hp : p.Prime) (ht : t ∈ Ioc n (n + k)) (hpt : p ∣ t) :
+    (hkp : k ≤ p) (ht : t ∈ Ioc n (n + k)) (hpt : p ∣ t) :
     (∏ m ∈ Ioc n (n + k), m).factorization p = t.factorization p := by
   have hNonzero : ∀ m ∈ Ioc n (n + k), m ≠ 0 := by
     intro m hm
@@ -60,11 +60,11 @@ theorem sylvester_schur_lower_bound_of_no_witness {k n l : ℕ}
     (hAll : ∀ p : ℕ, k ≤ p → p.Prime →
       l ∣ (∏ m ∈ Ioc n (n + k), m).factorization p) : k ^ l < n := by
   obtain ⟨p, hp, hkp, hProd⟩ := hSylvester
-  obtain ⟨m, hm, hpm⟩ := (Prime.dvd_finset_prod_iff hp.prime _).mp hProd
+  obtain ⟨m, hm, hpm⟩ := (Prime.dvd_finsetProd_iff hp.prime _).mp hProd
   have hmBounds := mem_Ioc.mp hm
   have hmNonzero : m ≠ 0 := by omega
   have hDiv := hAll p hkp.le hp
-  rw [large_prime_factorization_single hkp.le hp hm hpm] at hDiv
+  rw [large_prime_factorization_single hkp.le hm hpm] at hDiv
   have hPos := hp.factorization_pos_of_dvd hmNonzero hpm
   have hPow := (hp.pow_dvd_iff_le_factorization hmNonzero).2 (Nat.le_of_dvd hPos hDiv)
   exact sylvester_schur_lower_bound hl hkp hm hPow
@@ -79,7 +79,10 @@ lemma cube_gap {x l : ℕ} (hl : 3 ≤ l) :
   calc
     x ^ r * x ^ 3 + 3 * (x ^ r * x ^ 2) =
         x ^ r * (x ^ 3 + 3 * x ^ 2) := by ring
-    _ ≤ x ^ r * (x + 1) ^ 3 := Nat.mul_le_mul_left _ (by nlinarith)
+    _ ≤ x ^ r * (x + 1) ^ 3 := Nat.mul_le_mul_left _ (by
+      calc
+        x ^ 3 + 3 * x ^ 2 ≤ x ^ 3 + 3 * x ^ 2 + (3 * x + 1) := by omega
+        _ = (x + 1) ^ 3 := by ring)
     _ ≤ (x + 1) ^ r * (x + 1) ^ 3 := Nat.mul_le_mul_right _ hMono
 
 lemma pair_product_injective {n k i j u v : ℕ}
@@ -163,8 +166,12 @@ theorem distinct_pair_products {n k l : ℕ} {a x : ℕ → ℕ}
     ring
   have hT : (n + u) * (n + v) = A * t ^ l := by
     dsimp [A, t]
-    rw [hRepr u (by omega), hRepr v hv, ← hCoeff, mul_pow]
-    ring
+    rw [hRepr u (by omega), hRepr v hv]
+    calc
+      a u * x u ^ l * (a v * x v ^ l) = (a u * a v) * (x u * x v) ^ l := by
+        rw [mul_pow]
+        ring
+      _ = (a i * a j) * (x u * x v) ^ l := by rw [hCoeff]
   have hLowS : n ^ 2 ≤ A * s ^ l := by
     rw [← hS, pow_two]
     exact Nat.mul_le_mul (by omega) (by omega)

@@ -55,6 +55,7 @@ lemma primeFactors_injective_on_squarefree {S : Finset ℕ} {a : ℕ → ℕ}
     (hSquare : ∀ t ∈ S, Squarefree (a t)) (hInj : Set.InjOn a ↑S) :
     Set.InjOn (fun t => (a t).primeFactors) ↑S := by
   intro i hi j hj h
+  change (a i).primeFactors = (a j).primeFactors at h
   apply hInj hi hj
   calc
     a i = ∏ p ∈ (a i).primeFactors, p := (Nat.prod_primeFactors_of_squarefree (hSquare i hi)).symm
@@ -94,8 +95,10 @@ lemma squarefree_capacity_with_bad (n k s : ℕ) (a : ℕ → ℕ)
     · exact (primeFactors_injective_on_squarefree hSquare hInj).mono (fun _ ht => hGoodSub ht)
   have hTotal := Finset.card_sdiff_add_card_eq_card hBadSub
   have hSC : S.card = k := by simp [S]
-  change k ≤ 2 ^ (smallPrimes k s).card + bad.card
-  omega
+  calc
+    k = S.card := hSC.symm
+    _ = good.card + bad.card := hTotal.symm
+    _ ≤ 2 ^ (smallPrimes k s).card + bad.card := Nat.add_le_add_right hGoodCard _
 
 lemma squarefree_capacity (n k s : ℕ) (a : ℕ → ℕ)
     (hSquare : ∀ t ∈ Ioc n (n + k), Squarefree (a t))
