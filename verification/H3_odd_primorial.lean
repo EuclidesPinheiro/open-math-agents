@@ -344,6 +344,16 @@ private lemma base_denominator_lower (r : ℕ) :
         (factorial_run_lower 1666 d₃)) (factorial_run_lower 1000 d₅))
     _ = _ := (group_six _ _ _ _ _ _).symm
 
+private lemma extend_base_ratio (N D t u q r m v c : ℕ)
+    (hBase : N*q*c ≤ D*r) (hRun : t*m ≤ u*c*v) :
+    (N*t)*(q*m) ≤ (D*u)*(r*v) := by
+  calc
+    _ = (N*q)*(t*m) := by ac_rfl
+    _ ≤ (N*q)*(u*c*v) := Nat.mul_le_mul_left _ hRun
+    _ = (N*q*c)*(u*v) := by ac_rfl
+    _ ≤ (D*r)*(u*v) := Nat.mul_le_mul_right _ hBase
+    _ = _ := by ac_rfl
+
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 1500000 in
 lemma factorial_ratio_base (r : Fin 30) :
@@ -357,14 +367,19 @@ lemma factorial_ratio_base (r : Fin 30) :
   rw [pow_add 100,pow_add 253]
   calc
     _ ≤ (factorialNumerator 5000*baseTop r.val)*(100^5000*100^r.val) := Nat.mul_le_mul_right _ hA
-    _ = (factorialNumerator 5000*100^5000)*(baseTop r.val*100^r.val) := by ac_rfl
-    _ ≤ (factorialNumerator 5000*100^5000)*(baseBottom r.val*100000000*253^r.val) :=
-      Nat.mul_le_mul_left _ hRow
-    _ = (factorialNumerator 5000*100^5000*100000000)*(baseBottom r.val*253^r.val) := by ac_rfl
-    _ ≤ (factorialDenominator 5000*253^5000)*(baseBottom r.val*253^r.val) :=
-      Nat.mul_le_mul_right _ factorial_ratio_at_5000
-    _ = (factorialDenominator 5000*baseBottom r.val)*(253^5000*253^r.val) := by ac_rfl
+    _ ≤ (factorialDenominator 5000*baseBottom r.val)*(253^5000*253^r.val) :=
+      extend_base_ratio _ _ _ _ _ _ _ _ _ factorial_ratio_at_5000 hRow
     _ ≤ _ := Nat.mul_le_mul_right _ hB
+
+private lemma combine_ratio_bounds (a b A B q r m v : ℕ) (hb : 0 < b)
+    (hBase : a*q ≤ b*r) (hGrowth : A*b*m ≤ B*a*v) : A*(q*m) ≤ B*(r*v) := by
+  apply Nat.le_of_mul_le_mul_right (c := b) _ hb
+  calc
+    _ = (A*b*m)*q := by ac_rfl
+    _ ≤ (B*a*v)*q := Nat.mul_le_mul_right _ hGrowth
+    _ = (B*v)*(a*q) := by ac_rfl
+    _ ≤ (B*v)*(b*r) := Nat.mul_le_mul_left _ hBase
+    _ = _ := by ac_rfl
 
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 1500000 in
@@ -384,15 +399,7 @@ theorem factorial_ratio_upper {n : ℕ} (hn : 5000 ≤ n) :
       have hGain := factorial_ratio_growth hk
       have hPos := Nat.pos_of_ne_zero (denominator_ne_zero k)
       rw [← hK,pow_add 100,pow_add 253]
-      apply Nat.le_of_mul_le_mul_right (c := factorialDenominator k) _ hPos
-      calc
-        _ = (factorialNumerator (k+30)*factorialDenominator k*100^30)*100^k := by ac_rfl
-        _ ≤ (factorialDenominator (k+30)*factorialNumerator k*253^30)*100^k :=
-          Nat.mul_le_mul_right _ hGain
-        _ = (factorialDenominator (k+30)*253^30)*(factorialNumerator k*100^k) := by ac_rfl
-        _ ≤ (factorialDenominator (k+30)*253^30)*(factorialDenominator k*253^k) :=
-          Nat.mul_le_mul_left _ hPrev
-        _ = _ := by ac_rfl
+      exact combine_ratio_bounds _ _ _ _ _ _ _ _ hPos hPrev hGain
 
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 1500000 in

@@ -1,6 +1,13 @@
 import Mathlib.NumberTheory.Primorial
 import Mathlib.Tactic
 
+/-! Large intervals from the primorial bound and the ordered coefficient sizes.
+
+For a prime `p`, its dyadic height is the first `j` for which `k ≤ 2 ^ j * p`.
+Summing over primes first gives a geometric sum of prime counts. Multiplying
+over primes gives an upper bound for the missing portion of the factorial.
+-/
+
 namespace Erdos137OddTail
 
 open Finset

@@ -4,7 +4,13 @@ import Mathlib.Data.Finset.Powerset
 import Mathlib.Data.ZMod.Basic
 import Mathlib.Data.Sym.Card
 
-/-! Arithmetic lemmas for the odd prime exponent case of Erdős–Selfridge. -/
+/-! The odd prime exponent case of Erdős and Selfridge, Theorem 2, Section 2.
+
+The first part proves distinctness modulo powers for short multisets of coefficients.
+After deleting one valuation maximizer per small prime, the retained coefficients
+have product dividing the factorial. A rectangle-free divisor cover bounds their
+ordered sizes. The short and medium intervals use the residue count directly.
+-/
 
 namespace Erdos137PerfectPower
 

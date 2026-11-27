@@ -3,6 +3,13 @@ import Mathlib.NumberTheory.PrimeCounting
 import Mathlib.FieldTheory.Finite.Basic
 import Mathlib.Tactic
 
+/-! Integer certificates for the range between the residue count and the uniform tail.
+
+The rank thresholds record powers of two gained over the factorial bound.
+Initially the prime count is bounded by a Fermat test on a wheel modulo 210.
+The subsequent intervals use the dyadic estimate from the primorial.
+-/
+
 namespace Erdos137OddBridge
 
 open Finset

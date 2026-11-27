@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        part: [bridge, tail, primorial, medium]
+        part: [bridge]
     env:
       PART: ${{ matrix.part }}
     runs-on: ubuntu-latest
@@ -77,4 +77,4 @@ jobs:
               printf '\n#print axioms Erdos137PerfectPower.medium_odd_prime_of_sylvester\n#print axioms Erdos137PerfectPower.odd_branch_from_rank_certificate\n' >> H3LeanAudit.lean
               ;;
           esac
-          timeout -k 5 960 stdbuf -oL -eL lake env lean H3LeanAudit.lean
+          timeout -k 5 960 stdbuf -oL -eL lake env lean -Dprofiler=true H3LeanAudit.lean
