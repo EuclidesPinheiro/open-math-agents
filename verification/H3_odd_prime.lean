@@ -2,6 +2,7 @@ import FormalConjectures.ErdosProblems.«137»
 import Mathlib.Data.Nat.Choose.Factorization
 import Mathlib.Data.Finset.Powerset
 import Mathlib.Data.ZMod.Basic
+import Mathlib.Data.Sym.Card
 
 /-! Arithmetic lemmas for the odd prime exponent case of Erdős–Selfridge. -/
 
@@ -926,6 +927,144 @@ theorem ratio_residue_bound {n k l : ℕ} {a x : ℕ → ℕ} (S P : Finset ℕ)
   simpa [Finset.offDiag_card, Fintype.card_fun, Fintype.card_coe, ZMod.card, Nat.mul_sub_left_distrib,
     pow_two, Nat.mul_comm] using hCard
 
+lemma multiset_prod_factorization (s : Multiset ℕ) (p : ℕ)
+    (hs : ∀ a ∈ s, a ≠ 0) :
+    s.prod.factorization p = (s.map (fun a => a.factorization p)).sum := by
+  induction s using Multiset.induction_on with
+  | empty => simp
+  | cons a s ih =>
+    have hA := hs a (Multiset.mem_cons_self _ _)
+    have hS : ∀ b ∈ s, b ≠ 0 := fun b hb => hs b (Multiset.mem_cons_of_mem hb)
+    have hProd : s.prod ≠ 0 := by
+      have h := Multiset.one_le_prod_of_one_le (fun b hb => Nat.pos_of_ne_zero (hS b hb))
+      omega
+    rw [Multiset.prod_cons, Nat.factorization_mul hA hProd, Finsupp.add_apply, ih hS,
+      Multiset.map_cons, Multiset.sum_cons]
+
+theorem smooth_multiset_residue_bound {n k l d : ℕ} {a x : ℕ → ℕ} (S P : Finset ℕ)
+    (hk : 0 < k) (hn : k^l < n) (hl : 2 ≤ l) (hTop : (k+1)^l ≤ n+k) (hd : d < l)
+    (hRepr : ∀ i ∈ Icc 1 k, n+i = a i * x i ^ l)
+    (hS : S ⊆ Icc 1 k) (ha : ∀ i ∈ S, a i ≠ 0)
+    (hSupport : ∀ i ∈ S, (a i).primeFactors ⊆ P) :
+    (S.card+d-1).choose d ≤ l ^ P.card := by
+  classical
+  letI : NeZero l := ⟨by omega⟩
+  let coeff := fun i : S => a i.val
+  let residue := fun s : Sym S d => fun p : P =>
+    ((s.val.map coeff).prod.factorization p : ZMod l)
+  have hActual (s : Sym S d) (i : ℕ) (hi : i ∈ s.val.map Subtype.val) : i ∈ Icc 1 k := by
+    obtain ⟨j, _, rfl⟩ := Multiset.mem_map.mp hi
+    exact hS j.property
+  have hFacZero (s : Sym S d) (p : ℕ) (hp : p.Prime) (hpP : p ∉ P) :
+      (s.val.map coeff).prod.factorization p = 0 := by
+    rw [multiset_prod_factorization _ p]
+    · apply Multiset.sum_eq_zero.mpr
+      intro e he
+      obtain ⟨t,ht,rfl⟩ := Multiset.mem_map.mp he
+      obtain ⟨i,_,rfl⟩ := Multiset.mem_map.mp ht
+      exact Nat.factorization_eq_zero_of_not_dvd (fun hd => hpP (hSupport i.val i.property
+        (Nat.mem_primeFactors.mpr ⟨hp, hd, ha i.val i.property⟩)))
+    · intro t ht
+      obtain ⟨i,_,rfl⟩ := Multiset.mem_map.mp ht
+      exact ha i.val i.property
+  have hInj : Function.Injective residue := by
+    intro s t h
+    have hs : (s.val.map Subtype.val).card = d := (Multiset.card_map _).trans s.property
+    have ht : (t.val.map Subtype.val).card = d := (Multiset.card_map _).trans t.property
+    apply Subtype.ext
+    apply Multiset.map_injective (f := Subtype.val) Subtype.val_injective
+    apply distinct_multiset_products_mod_l hk hn hl hTop hRepr _ _
+      (hActual s) (hActual t) (hs.trans ht.symm) (hs ▸ hd)
+    intro p hp
+    simp only [Multiset.map_map]
+    change (s.val.map coeff).prod.factorization p % l =
+      (t.val.map coeff).prod.factorization p % l
+    by_cases hpP : p ∈ P
+    · exact (ZMod.natCast_eq_natCast_iff _ _ _).mp (congrFun h ⟨p,hpP⟩)
+    · rw [hFacZero s p hp hpP, hFacZero t p hp hpP]
+  have hCard := Fintype.card_le_of_injective residue hInj
+  simpa [Sym.card_sym_eq_choose, Fintype.card_fun, Fintype.card_coe, ZMod.card] using hCard
+
+def consecutivePowerDifference (q m : ℕ) : ℕ := (q+1)^m - q^m
+
+lemma consecutive_power_difference_succ (q m : ℕ) :
+    consecutivePowerDifference q (m+1) = (q+1)^m + q*consecutivePowerDifference q m := by
+  have hle : q^m ≤ (q+1)^m := pow_le_pow_left' (by omega) _
+  have hEq := Nat.sub_add_cancel hle
+  have hMul := congrArg (fun z : ℕ => q*z) hEq
+  change q*((q+1)^m-q^m+q^m) = q*(q+1)^m at hMul
+  rw [Nat.mul_add] at hMul
+  unfold consecutivePowerDifference
+  rw [show (q+1)^(m+1) = (q+1)^m + q*(q+1)^m by rw [pow_succ]; ring,
+    pow_succ' q m]
+  omega
+
+lemma consecutive_power_difference_scale {q : ℕ} (hq : 5 ≤ q) (m : ℕ) :
+    5^m*q*consecutivePowerDifference q m ≤ q^m*5*consecutivePowerDifference 5 m := by
+  induction m with
+  | zero => simp [consecutivePowerDifference]
+  | succ m ih =>
+    have hPow : (5*(q+1))^m ≤ (6*q)^m := pow_le_pow_left' (by omega) m
+    rw [consecutive_power_difference_succ q m, consecutive_power_difference_succ 5 m]
+    change 5^(m+1)*q*((q+1)^m+q*consecutivePowerDifference q m) ≤
+      q^(m+1)*5*(6^m+5*consecutivePowerDifference 5 m)
+    calc
+      _ = 5*q*(5*(q+1))^m + 5*q*(5^m*q*consecutivePowerDifference q m) := by
+        rw [mul_pow, pow_succ 5 m]
+        ring
+      _ ≤ 5*q*(6*q)^m + 5*q*(q^m*5*consecutivePowerDifference 5 m) :=
+        Nat.add_le_add (Nat.mul_le_mul_left _ hPow) (Nat.mul_le_mul_left _ ih)
+      _ = _ := by rw [mul_pow, pow_succ q m]; ring
+
+lemma smooth_count_growth_step {q m f : ℕ} (hq : 5 ≤ q) (hf : 0 < f)
+    (hBase : 5*6^m ≤ (f+4)*5^m) :
+    q*(q+1)^m ≤ (f+q-1)*q^m := by
+  have hd₅ : consecutivePowerDifference 5 m + 5^m = 6^m :=
+    Nat.sub_add_cancel (pow_le_pow_left' (by decide : (5:ℕ) ≤ 6) m)
+  have hBaseDiff : 5*consecutivePowerDifference 5 m ≤ (f-1)*5^m := by
+    have h := congrArg (fun z : ℕ => 5*z) hd₅
+    change 5*(consecutivePowerDifference 5 m + 5^m) = 5*6^m at h
+    rw [Nat.mul_add] at h
+    rw [show f+4 = (f-1)+5 by omega, Nat.add_mul] at hBase
+    omega
+  have hDiff : q*consecutivePowerDifference q m ≤ (f-1)*q^m := by
+    apply Nat.le_of_mul_le_mul_left _ (pow_pos (by decide : 0 < (5:ℕ)) m)
+    calc
+      _ = 5^m*q*consecutivePowerDifference q m := by ring
+      _ ≤ q^m*5*consecutivePowerDifference 5 m := consecutive_power_difference_scale hq m
+      _ = q^m*(5*consecutivePowerDifference 5 m) := by ring
+      _ ≤ q^m*((f-1)*5^m) := Nat.mul_le_mul_left _ hBaseDiff
+      _ = _ := by ring
+  have hdq : consecutivePowerDifference q m + q^m = (q+1)^m :=
+    Nat.sub_add_cancel (pow_le_pow_left' (by omega) m)
+  rw [← hdq, Nat.mul_add, show f+q-1 = (f-1)+q by omega, Nat.add_mul]
+  exact Nat.add_le_add_right hDiff _
+
+lemma smooth_multiset_numeric_induction {l f m : ℕ} (hl : 5 ≤ l) (hf : 0 < f)
+    (hBase : 5^m < (f+3).choose 4) (hStep : 5*6^m ≤ (f+4)*5^m) :
+    l^m < (f+l-2).choose (l-1) := by
+  induction l, hl using Nat.le_induction with
+  | base => simpa using hBase
+  | succ q hq ih =>
+    have hSym₁ : (f+q-2).choose (f-1) = (f+q-2).choose (q-1) :=
+      Nat.choose_symm_of_eq_add (by omega)
+    have hSym₂ : (f+q-1).choose (f-1) = (f+q-1).choose q :=
+      Nat.choose_symm_of_eq_add (by omega)
+    have hId := Nat.choose_mul_succ_eq (f+q-2) (f-1)
+    rw [show f+q-2+1 = f+q-1 by omega,
+      show f+q-1-(f-1) = q by omega, hSym₁, hSym₂] at hId
+    have hGain := smooth_count_growth_step hq hf hStep
+    have hStrict := Nat.mul_lt_mul_of_pos_right ih (by omega : 0 < f+q-1)
+    rw [hId] at hStrict
+    have hStrict' : (f+q-1)*q^m < q*((f+q-1).choose q) := by
+      calc
+        _ = q^m*(f+q-1) := Nat.mul_comm _ _
+        _ < (f+q-1).choose q * q := hStrict
+        _ = _ := Nat.mul_comm _ _
+    have hAll := hGain.trans_lt hStrict'
+    have hNew : (q+1)^m < (f+q-1).choose q := Nat.lt_of_mul_lt_mul_left hAll
+    simpa only [show f+(q+1)-2 = f+q-1 by omega, Nat.add_sub_cancel] using hNew
+
 def intervalMultiples (n k p : ℕ) : Finset ℕ :=
   (Ioc n (n+k)).filter (p ∣ ·)
 
@@ -1017,13 +1156,80 @@ def smallOddCutoff (k : ℕ) : ℕ :=
   if k < 10 then 3 else if k < 28 then 5 else if k < 77 then 7
   else if k < 143 then 11 else if k < 340 then 13 else if k < 646 then 17 else 19
 
+private def smallPrimeList : List ℕ := [
+  2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43,
+  47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107,
+  109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181,
+  191, 193, 197, 199, 211, 223, 227, 229, 233, 239, 241, 251, 257, 263,
+  269, 271, 277, 281, 283, 293, 307, 311, 313, 317, 331, 337, 347, 349,
+  353, 359, 367, 373, 379, 383, 389, 397, 401, 409, 419, 421, 431, 433,
+  439, 443, 449, 457, 461, 463, 467, 479, 487, 491, 499, 503, 509, 521,
+  523, 541, 547, 557, 563, 569, 571, 577, 587, 593, 599, 601, 607, 613,
+  617, 619, 631, 641, 643, 647, 653, 659, 661, 673, 677, 683, 691, 701,
+  709, 719, 727, 733, 739, 743, 751, 757, 761, 769, 773, 787, 797, 809,
+  811, 821, 823, 827, 829, 839, 853, 857, 859, 863, 877, 881, 883, 887,
+  907, 911, 919, 929, 937, 941, 947, 953, 967, 971, 977, 983, 991, 997
+]
+
+set_option maxRecDepth 100000 in
+private def smallPrimeTable : Finset ℕ :=
+  ⟨(smallPrimeList : Multiset ℕ), by decide⟩
+
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-lemma small_cubic_certificate : ∀ r : Fin 997,
+private lemma small_prime_table_correct : smallPrimeTable = (range 1001).filter Nat.Prime := by
+  decide
+
+private def fastLow (k c : ℕ) : Finset ℕ :=
+  smallPrimeTable.filter fun p => p < k ∧ p ≤ c
+
+private def fastHigh (k c : ℕ) : Finset ℕ :=
+  smallPrimeTable.filter fun p => p < k ∧ c < p
+
+private lemma fast_low_eq {k c : ℕ} (hk : k ≤ 1000) : fastLow k c = lowPrimes k c := by
+  unfold fastLow lowPrimes
+  rw [small_prime_table_correct]
+  ext p
+  simp only [mem_filter, mem_range]
+  constructor
+  · rintro ⟨⟨_, hp⟩, hpK, hc⟩
+    exact ⟨hpK, hp, hc⟩
+  · rintro ⟨hpK, hp, hc⟩
+    exact ⟨⟨by omega, hp⟩, hpK, hc⟩
+
+private lemma fast_high_eq {k c : ℕ} (hk : k ≤ 1000) : fastHigh k c = highPrimes k c := by
+  unfold fastHigh highPrimes
+  rw [small_prime_table_correct]
+  ext p
+  simp only [mem_filter, mem_range]
+  constructor
+  · rintro ⟨⟨_, hp⟩, hpK, hc⟩
+    exact ⟨hpK, hp, hc⟩
+  · rintro ⟨hpK, hp, hc⟩
+    exact ⟨⟨by omega, hp⟩, hpK, hc⟩
+
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+private lemma fast_small_odd_certificates : ∀ r : Fin 997,
     let k := r.val+4
     let c := smallOddCutoff k
-    3^(lowPrimes k c).card < smoothLowerBound k c * (smoothLowerBound k c-1) := by
+    let f := k - ∑ p ∈ fastHigh k c, (k+p-1)/p
+    let m := (fastLow k c).card
+    3^m < f*(f-1) ∧ 0 < f ∧ 5^m < (f+3).choose 4 ∧ 5*6^m ≤ (f+4)*5^m := by
   decide
+
+lemma small_odd_certificates : ∀ r : Fin 997,
+    let k := r.val+4
+    let c := smallOddCutoff k
+    let f := smoothLowerBound k c
+    let m := (lowPrimes k c).card
+    3^m < f*(f-1) ∧ 0 < f ∧ 5^m < (f+3).choose 4 ∧ 5*6^m ≤ (f+4)*5^m := by
+  intro r
+  have hk : r.val+4 ≤ 1000 := by omega
+  have h := fast_small_odd_certificates r
+  dsimp only at h ⊢
+  rw [fast_high_eq hk, fast_low_eq hk] at h
+  exact h
 
 theorem small_cubic_of_sylvester {n k : ℕ} (hk : 4 ≤ k) (hkUpper : k ≤ 1000)
     (hSylvester : ∃ p : ℕ, p.Prime ∧ k < p ∧ p ∣ ∏ t ∈ Ioc n (n+k), t) :
@@ -1034,10 +1240,41 @@ theorem small_cubic_of_sylvester {n k : ℕ} (hk : 4 ≤ k) (hkUpper : k ≤ 100
   obtain ⟨S,hS,hCount,hPrime⟩ := good_smooth_coefficients (smallOddCutoff k) hRepr hSupport
   have hBound := ratio_residue_bound S (lowPrimes k (smallOddCutoff k))
     (by omega) hN (by decide) hTop hRepr hS (fun i hi => ha i (hS hi)) hPrime
-  have hNumeric := small_cubic_certificate ⟨k-4, by omega⟩
+  have hNumeric := (small_odd_certificates ⟨k-4, by omega⟩).1
   dsimp only at hNumeric
   rw [show k-4+4 = k by omega] at hNumeric
   have hCountProduct := Nat.mul_le_mul hCount (Nat.sub_le_sub_right hCount 1)
   exact (not_lt_of_ge (hCountProduct.trans hBound)) hNumeric
+
+theorem small_higher_exponent_of_sylvester {n k l : ℕ}
+    (hk : 4 ≤ k) (hkUpper : k ≤ 1000) (hl : 5 ≤ l)
+    (hSylvester : ∃ p : ℕ, p.Prime ∧ k < p ∧ p ∣ ∏ t ∈ Ioc n (n+k), t) :
+    ∃ p : ℕ, k ≤ p ∧ p.Prime ∧ ¬ l ∣ (∏ t ∈ Ioc n (n+k), t).factorization p := by
+  by_contra! hAll
+  obtain ⟨hN,hTop⟩ := sylvester_schur_power_bounds_of_no_witness (by omega) hSylvester hAll
+  obtain ⟨a,x,ha,hRepr,hSupport,_⟩ := normalize_odd_coefficients (by omega) hAll
+  obtain ⟨S,hS,hCount,hPrime⟩ := good_smooth_coefficients (smallOddCutoff k) hRepr hSupport
+  have hBound := smooth_multiset_residue_bound S (lowPrimes k (smallOddCutoff k))
+    (by omega) hN (by omega) hTop (d := l-1) (by omega) hRepr hS (fun i hi => ha i (hS hi)) hPrime
+  have hNumeric := (small_odd_certificates ⟨k-4, by omega⟩).2
+  dsimp only at hNumeric
+  rw [show k-4+4 = k by omega] at hNumeric
+  have hStrict := smooth_multiset_numeric_induction hl hNumeric.1 hNumeric.2.1 hNumeric.2.2
+  have hMono := Nat.choose_le_choose (l-1)
+    (show smoothLowerBound k (smallOddCutoff k)+l-2 ≤ S.card+(l-1)-1 by omega)
+  exact (not_lt_of_ge (hMono.trans hBound)) hStrict
+
+theorem small_odd_prime_of_sylvester {n k l : ℕ} (hk : 3 ≤ k) (hkUpper : k ≤ 1000)
+    (hPrime : l.Prime) (hl : 3 ≤ l)
+    (hSylvester : ∃ p : ℕ, p.Prime ∧ k < p ∧ p ∣ ∏ t ∈ Ioc n (n+k), t) :
+    ∃ p : ℕ, k ≤ p ∧ p.Prime ∧ ¬ l ∣ (∏ t ∈ Ioc n (n+k), t).factorization p := by
+  by_cases hK : k = 3
+  · subst k
+    exact three_odd_exponent_of_sylvester hl hSylvester
+  by_cases hL : l = 3
+  · subst l
+    exact small_cubic_of_sylvester (by omega) hkUpper hSylvester
+  · have hNotFour : l ≠ 4 := fun e => (by decide : ¬Nat.Prime 4) (e ▸ hPrime)
+    exact small_higher_exponent_of_sylvester (by omega) hkUpper (by omega) hSylvester
 
 end Erdos137PerfectPower
