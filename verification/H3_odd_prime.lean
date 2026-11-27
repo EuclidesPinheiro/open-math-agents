@@ -2242,6 +2242,8 @@ private lemma medium_band_cover {k : ℕ} (hk : 1001 ≤ k) (hkU : k ≤ 30000) 
     change k < 30001
     omega)
 
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 1500000 in
 private def mediumPrimeList : List ℕ :=
   List.flatten [
     [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53,
@@ -2455,6 +2457,7 @@ private lemma medium_prime_list_exact :
     mediumPrimeList = (List.range 30001).filter (fun n => decide n.Prime) := by
   decide +kernel
 
+set_option maxRecDepth 100000 in
 private def mediumPrimeTable : Finset ℕ :=
   ⟨(mediumPrimeList : Multiset ℕ), by
     rw [medium_prime_list_exact]
