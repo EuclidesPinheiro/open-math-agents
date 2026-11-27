@@ -1,9 +1,15 @@
-import FormalConjectures.ErdosProblems.«137»
+import OMAReductions.R_Erdos137_erdos_137_variants_perfect_power_R1_H3_R1
 import Mathlib.Data.Nat.Choose.Factorization
 import Mathlib.Data.Nat.Squarefree
 import Mathlib.NumberTheory.Primorial
 
-/-! The finite counting and four-factor arguments for the quadratic branch. -/
+/-! The square-exponent branch of Erdős–Selfridge, Theorem 2.
+
+Count the possible squarefree coefficients for shorter intervals. For longer
+intervals, compare their product with a factorial times a primorial. A bound
+on odd valuations supplies the saving needed for the elementary primorial
+bound, and the arithmetic inequality propagates in blocks of 650.
+-/
 
 namespace Erdos137H3Square
 
@@ -190,13 +196,7 @@ theorem four_coefficients_cannot_permute_divisors_six (n : ℕ) (a x : ℕ → �
     omega
   have hList : (∏ t ∈ S, t) = (n + 1) * (n + 2) * (n + 3) * (n + 4) := by
     rw [hS]
-    have h12 : n + 1 ≠ n + 2 := by omega
-    have h13 : n + 1 ≠ n + 3 := by omega
-    have h14 : n + 1 ≠ n + 4 := by omega
-    have h23 : n + 2 ≠ n + 3 := by omega
-    have h24 : n + 2 ≠ n + 4 := by omega
-    have h34 : n + 3 ≠ n + 4 := by omega
-    simp [Finset.prod_insert, h12, h13, h14, h23, h24, h34, Nat.mul_assoc]
+    simp [Finset.prod_insert, Nat.mul_assoc]
   rw [hList] at hProduct
   have hFour := four_consecutive_not_square (n + 1) (6 * ∏ t ∈ S, x t) (by omega)
   exact hFour (by simpa [Nat.add_assoc] using hProduct)
@@ -511,6 +511,59 @@ def factorialValuationAux (p : ℕ) : ℕ → ℕ → ℕ
 
 def factorialValuation (k p : ℕ) : ℕ := factorialValuationAux p k k
 
+lemma ceiling_le_length (k : ℕ) {p : ℕ} (hp : p.Prime) : (k + p - 1) / p ≤ k := by
+  apply Nat.le_of_lt_succ
+  apply (Nat.div_lt_iff_lt_mul hp.pos).2
+  rw [Nat.succ_mul]
+  have h := Nat.mul_le_mul_left k hp.one_lt.le
+  rw [Nat.mul_one] at h
+  have hPos := hp.pos
+  omega
+
+lemma odd_bound_aux_le_length {p : ℕ} (hp : p.Prime) (fuel k : ℕ) :
+    oddBoundAux p fuel k ≤ k := by
+  induction fuel generalizing k with
+  | zero => exact le_rfl
+  | succ fuel ih =>
+    by_cases hSmall : k ≤ 1
+    · rw [oddBoundAux, if_pos hSmall]
+    · rw [oddBoundAux, if_neg hSmall]
+      let a := (k + p - 1) / p
+      let b := a / p
+      change a - b + oddBoundAux p fuel b ≤ k
+      have hb : b ≤ a := Nat.div_le_self _ _
+      have hi := ih b
+      have ha : a ≤ k := ceiling_le_length k hp
+      omega
+
+lemma div_le_factorial_valuation (k p : ℕ) : k / p ≤ factorialValuation k p := by
+  cases k with
+  | zero => simp [factorialValuation, factorialValuationAux]
+  | succ k =>
+    rw [factorialValuation, factorialValuationAux, if_neg (Nat.succ_ne_zero k)]
+    omega
+
+lemma ceiling_eq_div_add_one {k p : ℕ} (hk : 0 < k) (hp : 0 < p) :
+    (k+p-1)/p = (k-1)/p + 1 := by
+  rw [show k+p-1 = (k-1)+p by omega, Nat.add_div_right _ hp]
+
+lemma odd_bound_le_factorial_valuation {k p : ℕ} (hk : 2 ≤ k) (hp : p.Prime) :
+    oddBound k p ≤ 1 + factorialValuation (k-1) p := by
+  have hCeil : oddBound k p ≤ (k + p - 1) / p := by
+    cases k with
+    | zero => omega
+    | succ k =>
+      rw [oddBound, oddBoundAux, if_neg (by omega)]
+      let a := (k.succ + p - 1) / p
+      let b := a / p
+      change a - b + oddBoundAux p k b ≤ a
+      have hb : b ≤ a := Nat.div_le_self _ _
+      have hi := odd_bound_aux_le_length hp k b
+      omega
+  rw [ceiling_eq_div_add_one (by omega) hp.pos] at hCeil
+  have hVal := div_le_factorial_valuation (k-1) p
+  omega
+
 def savingPrimes : Finset ℕ := {2, 3, 5, 7, 11, 13, 17, 19}
 
 def baseDivisor (k : ℕ) : ℕ :=
@@ -686,7 +739,7 @@ def evenMultiplicities (n k p : ℕ) : Finset ℕ :=
 lemma odd_even_multiplicities_card (n k p : ℕ) :
     (oddMultiplicities n k p).card + (evenMultiplicities n k p).card = k := by
   have hC := Finset.card_filter_add_card_filter_not
-    (Ioc n (n + k)) (fun t => t.factorization p % 2 = 1)
+    (s := Ioc n (n + k)) (fun t => t.factorization p % 2 = 1)
   have hEven : ((Ioc n (n + k)).filter fun t => ¬ t.factorization p % 2 = 1) =
       evenMultiplicities n k p := by
     ext t
@@ -707,7 +760,8 @@ lemma interval_div_length_bounds (n k p : ℕ) (hp : 0 < p) :
   have hMod := Nat.mod_lt n hp
   have hLo : k / p ≤ (n % p + k) / p := Nat.div_le_div_right (by omega)
   have hHi : (n % p + k) / p ≤ (k + p - 1) / p := Nat.div_le_div_right (by omega)
-  omega
+  rw [hEq, Nat.add_sub_cancel]
+  exact ⟨hLo, hHi⟩
 
 lemma oddMultiplicity_dvd {t p : ℕ} (h : t.factorization p % 2 = 1) : p ∣ t := by
   by_contra! hNot
@@ -732,7 +786,7 @@ lemma odd_multiplicities_scale (n k : ℕ) {p : ℕ} (hp : p.Prime) :
       have hLow : n/p < t/p := (Nat.div_lt_iff_lt_mul hp.pos).2 (by
         simpa only [Nat.mul_comm] using (show n < p*(t/p) by omega))
       refine ⟨⟨hLow, Nat.div_le_div_right ht.2⟩, ?_⟩
-      have hQ : t / p ≠ 0 := by omega
+      have hQ : t / p ≠ 0 := (lt_of_le_of_lt (Nat.zero_le _) hLow).ne'
       have hh := hFac (t/p) hQ
       rw [hEq] at hh
       rw [hh] at hOdd
@@ -742,7 +796,7 @@ lemma odd_multiplicities_scale (n k : ℕ) {p : ℕ} (hp : p.Prime) :
       have hRight : q*p ≤ n+k := (Nat.le_div_iff_mul_le hp.pos).1 hHigh
       refine ⟨p*q, ⟨⟨by simpa only [Nat.mul_comm] using hLeft,
         by simpa only [Nat.mul_comm] using hRight⟩, ?_⟩, Nat.mul_div_cancel_left q hp.pos⟩
-      rw [hFac q (by omega)]
+      rw [hFac q (lt_of_le_of_lt (Nat.zero_le _) hLow).ne']
       omega
   rw [← hImage, Finset.card_image_of_injOn]
   intro s hs t ht heq
@@ -750,6 +804,7 @@ lemma odd_multiplicities_scale (n k : ℕ) {p : ℕ} (hp : p.Prime) :
   have hdT := oddMultiplicity_dvd (mem_filter.mp ht).2
   have hS := Nat.mul_div_cancel' hdS
   have hT := Nat.mul_div_cancel' hdT
+  change s / p = t / p at heq
   rw [heq] at hS
   exact hS.symm.trans hT
 
@@ -778,21 +833,14 @@ lemma odd_bound_aux_valid {p : ℕ} (hp : p.Prime) (fuel : ℕ) :
       let a := (k + p - 1) / p
       let b := a / p
       change (oddMultiplicities n k p).card ≤ a - b + oddBoundAux p fuel b
-      have ha : a ≤ k := by
-        apply Nat.div_le_of_le_mul
-        have h : (k - 1) ≤ p * (k - 1) := by
-          have hh := Nat.mul_le_mul_right (k - 1) hp.two_le
-          omega
-        have he : p*k = p*(k-1)+p := by
-          rw [← Nat.mul_add, show k - 1 + 1 = k by omega]
-        dsimp [a]
-        omega
+      have ha : a ≤ k := ceiling_le_length k hp
       have hBlt : b < k := by
         by_cases hza : a = 0
         · simp [b, hza]; omega
         · exact (Nat.div_lt_self (Nat.pos_of_ne_zero hza) hp.one_lt).trans_le ha
-      have hFirst := (interval_div_length_bounds n k p hp.pos).2
-      have hSecond := (interval_div_length_bounds (n/p) a p hp.pos).1
+      have hFirst : (n+k)/p - n/p ≤ a := (interval_div_length_bounds n k p hp.pos).2
+      have hSecond : b ≤ (n/p+a)/p - (n/p)/p :=
+        (interval_div_length_bounds (n/p) a p hp.pos).1
       have h1 := odd_multiplicities_scale n k hp
       have h2 := even_multiplicities_card_mono (n/p) p hFirst
       have h3 := odd_multiplicities_scale (n/p) a hp
@@ -801,8 +849,6 @@ lemma odd_bound_aux_valid {p : ℕ} (hp : p.Prime) (fuel : ℕ) :
       have hBalanceB := odd_even_multiplicities_card ((n/p)/p) b p
       have hRec := ih ((n/p)/p) b (by omega)
       have hbA : b ≤ a := Nat.div_le_self _ _
-      change (n+k)/p - n/p ≤ a at hFirst
-      change b ≤ (n/p+a)/p - (n/p)/p at hSecond
       omega
 
 theorem odd_multiplicities_card_le (n k : ℕ) {p : ℕ} (hp : p.Prime) :
@@ -816,12 +862,15 @@ lemma factorial_valuation_sum (p fuel k : ℕ) :
   | succ fuel ih =>
     by_cases hk : k = 0
     · simp [factorialValuationAux, hk]
-    · rw [factorialValuationAux, if_neg hk, ih, Finset.sum_range_succ']
+    · rw [factorialValuationAux, if_neg hk]
+      change k / p + factorialValuationAux p fuel (k / p) = _
+      rw [ih, Finset.sum_range_succ']
       simp only [Nat.zero_add, pow_one]
       congr 1
       apply Finset.sum_congr rfl
       intro j _
-      rw [Nat.div_div_eq_div_mul, pow_succ']
+      change k / p / p ^ (j + 1) = k / p ^ (j + 1 + 1)
+      rw [Nat.div_div_eq_div_mul, pow_succ' p (j + 1)]
 
 lemma factorial_valuation_eq {p : ℕ} (hp : p.Prime) (k : ℕ) :
     factorialValuation k p = k.factorial.factorization p := by
@@ -904,13 +953,6 @@ lemma block_savings_nat :
     ∀ p : Fin 20, p.val ∈ savingPrimes → oddBound 650 p.val ≤ factorialValuation 650 p.val := by
   decide
 
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma base_savings_nat :
-    ∀ r : Fin 650, ∀ p : Fin 20, p.val ∈ savingPrimes →
-      oddBound (676+r.val) p.val ≤ 1 + factorialValuation (675+r.val) p.val := by
-  decide
-
 lemma normalized_product_factorization (n k : ℕ) (a : ℕ → ℕ)
     (hPos : ∀ t ∈ Ioc n (n+k), a t ≠ 0)
     (hParity : ∀ t ∈ Ioc n (n+k), ∀ p, (a t).factorization p = t.factorization p % 2)
@@ -980,11 +1022,8 @@ theorem normalized_large_square_impossible (n : ℕ) (r : Fin 650) (q : ℕ)
     · have hp19 := (saving_prime_bounds hSel).2
       let j : Fin 20 := ⟨p, by omega⟩
       have hBg := block_savings_nat j hSel
-      have hB0 := base_savings_nat r j hSel
+      have hB0 := odd_bound_le_factorial_valuation (k := b) (by dsimp [b]; omega) hp
       change oddBound 650 p ≤ factorialValuation 650 p at hBg
-      change oddBound b p ≤ 1 + factorialValuation (675+r.val) p at hB0
-      have hb1 : b - 1 = 675+r.val := by dsimp [b]; omega
-      rw [← hb1] at hB0
       have hOdd := odd_multiplicities_blocks n b q hp
       have hFact := factorial_valuations_blocks (b-1) q p
       have hIndex : (b-1)+q*650 = k-1 := by dsimp [k, b]; omega
@@ -1001,13 +1040,10 @@ theorem normalized_large_square_impossible (n : ℕ) (r : Fin 650) (q : ℕ)
       by_cases hpK : p < k
       · rw [hPrecise, primorial_valuation_one hp (by omega)]
         have hOdd := odd_multiplicities_le_ceiling n k hp
-        have hQ : (k+p-1)/p = (k-1)/p + 1 := by
-          rw [show k+p-1 = (k-1)+p by omega, Nat.add_div_right _ hp.pos]
+        have hQ := ceiling_eq_div_add_one (show 0 < k by omega) hp.pos
         have hVal : (k-1)/p ≤ (k-1).factorial.factorization p := by
-          rw [← factorial_valuation_eq hp, factorialValuation]
-          have hN : k - 1 ≠ 0 := by omega
-          rw [show k-1 = (k-2)+1 by omega, factorialValuationAux, if_neg (by omega)]
-          omega
+          rw [← factorial_valuation_eq hp]
+          exact div_le_factorial_valuation (k-1) p
         omega
       · have hZero (t : ℕ) (ht : t ∈ R) : (a t).factorization p = 0 := by
           apply Nat.factorization_eq_zero_of_not_dvd
@@ -1022,7 +1058,10 @@ theorem normalized_large_square_impossible (n : ℕ) (r : Fin 650) (q : ℕ)
     have h := Nat.le_of_dvd (Nat.mul_pos (Nat.factorial_pos _) (primorial_pos _)) hDiv
     exact h.trans (Nat.mul_le_mul_left _ ((primorial_le_four_pow (k-1)).trans
       (pow_le_pow_right' (by decide : 1 ≤ (4 : ℕ)) (by omega))))
-  have hCard : (R.image a).card = k := by rw [Finset.card_image_of_injOn hInj]; simp [R]
+  have hCard : (R.image a).card = k := by
+    rw [Finset.card_image_of_injOn hInj]
+    change (Ioc n (n+k)).card = k
+    simp
   have hNoDiv (t : ℕ) (ht : t ∈ R.image a) : 0 < t ∧ ¬ 4 ∣ t ∧ ¬ 9 ∣ t := by
     obtain ⟨j, hj, rfl⟩ := mem_image.mp ht
     have hs := hSquare j hj
@@ -1069,7 +1108,7 @@ theorem h3_square_of_sylvester {n k : ℕ} (hk : 3 ≤ k)
 end Erdos137H3Square
 
 
-/-! Sylvester–Schur for the interval used in Erdős 137.
+/- Sylvester–Schur for the interval used in Erdős 137.
 
 The binomial theorem below is the existing Lean proof credited to @senamakel
 in proofs/Erdos683.erdos_683.variant.sylvester_schur.lean. The last lemma
@@ -1084,7 +1123,7 @@ namespace SylvesterSchurOMA
 /-- The number of primes `≤ k`. -/
 def pc (k : ℕ) : ℕ := ((Finset.range (k + 1)).filter Nat.Prime).card
 
-/-! ## Step 2: valuations of `N.choose k` -/
+/- ## Step 2: valuations of `N.choose k` -/
 
 /-- A prime `p` with `p ≤ k`, `N < 3p`, `N < p²` and `2k ≤ N` does not divide `N.choose k`. -/
 lemma factorization_choose_eq_zero_of_third {p N k : ℕ} (hp : p.Prime) (hpk : p ≤ k)
@@ -1105,7 +1144,7 @@ lemma factorization_choose_eq_zero_of_third {p N k : ℕ} (hp : p.Prime) (hpk : 
   simp only [pow_one, hk1, hk2]
   omega
 
-/-! ## Step 3: the counting bound -/
+/- ## Step 3: the counting bound -/
 
 /-- Under the hypothesis that every prime factor of `N.choose k` is at most `k`,
 `N.choose k ≤ N ^ π(k)`. -/
@@ -1142,7 +1181,7 @@ lemma counting_bound {N k : ℕ} (h2k : 2 * k ≤ N) (hN : 0 < N)
     _ = 2 ^ k * k ! * N ^ pc k := by ring
 
 
-/-! ## Step 4a: upper and lower bounds for `N.choose k` -/
+/- ## Step 4a: upper and lower bounds for `N.choose k` -/
 
 lemma pc_mono {a b : ℕ} (h : a ≤ b) : pc a ≤ pc b := by
   unfold pc
@@ -1258,7 +1297,7 @@ lemma lower_bound {N k : ℕ} (hk : 0 < k) (h2k : 2 * k ≤ N) :
     _ = 2 * k * (2 * k) ^ k * N.choose k := by ring
 
 
-/-! ## Step 4b: prime counting by the mod-30 wheel -/
+/- ## Step 4b: prime counting by the mod-30 wheel -/
 
 lemma pc_eq_count (x : ℕ) : pc x = Nat.count Nat.Prime (x + 1) := by
   rw [pc, Nat.count_eq_card_filter_range]
@@ -1281,7 +1320,7 @@ lemma three_pc_lt {k : ℕ} (hk : 34 ≤ k) : 3 * pc k < k := by
   · have := pc_wheel (x := k) (by omega)
     omega
 
-/-! ## Step 4c: the large-`N` region via counting -/
+/- ## Step 4c: the large-`N` region via counting -/
 
 lemma not_large_region {N k : ℕ} (hk : 34 ≤ k) (h2k : 2 * k ≤ N)
     (H : ∀ p, p.Prime → p ∣ N.choose k → p ≤ k) : N ^ 2 < (2 * k) ^ 3 := by
@@ -1309,7 +1348,7 @@ lemma not_large_region {N k : ℕ} (hk : 34 ≤ k) (h2k : 2 * k ≤ N)
   omega
 
 
-/-! ## Step 4d: elementary growth lemmas -/
+/- ## Step 4d: elementary growth lemmas -/
 
 lemma poly1 : ∀ j ≥ 14, 48 * (j + 3) ^ 2 ≤ 2 ^ j := by
   intro j hj
@@ -1382,7 +1421,7 @@ lemma aux_lin (j : ℕ) : 114 * j + 228 ≤ 48 * (j + 3) ^ 2 := by nlinarith
 lemma four_pow_eq (k : ℕ) : 4 ^ k = 2 ^ k * 2 ^ k := by
   rw [← mul_pow]; norm_num
 
-/-! ## Step 4e: the middle region for `k ≥ 2^14` -/
+/- ## Step 4e: the middle region for `k ≥ 2^14` -/
 
 lemma middle_region {N k : ℕ} (hk : 2 ^ 14 ≤ k) (h2k : 2 * k ≤ N) (hsm : N ^ 2 < (2 * k) ^ 3)
     (H : ∀ p, p.Prime → p ∣ N.choose k → p ≤ k) : False := by
@@ -1609,7 +1648,7 @@ def bnd : List ℕ := [0, 3, 9, 49, 20, 62, 36, 87, 57, 46, 40, 66, 58, 91, 79, 
 def lpf : List ℕ := [2, 2, 2, 3, 2, 5, 3, 7, 2, 3, 5, 11, 3, 13, 7, 5, 2, 17, 3, 19, 5, 7, 11, 23, 3, 5, 13, 3, 7, 29, 5, 31, 2, 11, 17, 7, 3, 37, 19, 13, 5, 41, 7, 43, 11, 5, 23, 47, 3, 7, 5, 17, 13, 53, 3, 11, 7, 19, 29, 59, 5, 61, 31, 7, 2, 13, 11, 67, 17, 23, 7, 71, 3, 73, 37, 5, 19, 11, 13, 79, 5, 3, 41, 83, 7, 17, 43, 29, 11, 89, 5, 13, 23, 31, 47, 19, 3, 97, 7, 11, 5, 101, 17, 103, 13, 7, 53, 107, 3, 109, 11, 37, 7, 113, 19, 23, 29, 13, 59, 17, 5, 11, 61, 41, 31, 5, 7, 127, 2, 43, 13, 131, 11, 19, 67, 5, 17, 137, 23, 139, 7, 47, 71, 13, 3, 29, 73]
 def smallPrimes : List ℕ := [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139]
 
-/-! ## Step 5: the finite residue -/
+/- ## Step 5: the finite residue -/
 
 lemma prime_dvd_choose_of_dvd_term {p N k i : ℕ} (hp : p.Prime) (hkp : k < p) (hi : i < k)
     (hd : p ∣ N - i) : p ∣ N.choose k := by
@@ -1871,11 +1910,7 @@ theorem sylvester_block (n k : ℕ) (hk : 0 < k) (hn : k < n) :
 end Erdos137H3Square
 
 
-open Finset
-
-theorem h3_square (k n : ℕ) (hk : 3 ≤ k) (hn : k < n) :
-    ∃ p : ℕ, k ≤ p ∧ p.Prime ∧ ¬ 2 ∣ (∏ t ∈ Ioc n (n+k), t).factorization p := by
+theorem OMA.solution : OMA.R_Erdos137_erdos_137_variants_perfect_power_R1_H3_R1.H1 := by
+  intro k n hk hn
   exact Erdos137H3Square.h3_square_of_sylvester hk
     (Erdos137H3Square.sylvester_block n k (by omega) hn)
-
-#print axioms h3_square

@@ -30,8 +30,10 @@ jobs:
           curl -fsSL --retry 3 https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -o "${RUNNER_TEMP}/elan-init.sh"
           if [ ! -x "$HOME/.elan/bin/lake" ]; then sh "${RUNNER_TEMP}/elan-init.sh" -y --default-toolchain none; fi
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
-          cd formal-conjectures
-          "$HOME/.elan/bin/lake" exe cache get
+          if [ "${{ steps.leaned-cache.outputs.cache-hit }}" != "true" ]; then
+            cd formal-conjectures
+            "$HOME/.elan/bin/lake" exe cache get
+          fi
       - name: Build the pinned problem module
         shell: bash
         run: |
@@ -51,9 +53,16 @@ jobs:
         run: |
           cd formal-conjectures
           timeout 240 lake env lean ../verification/H3_odd_prime.lean
-      - name: Compile the square case lemmas
+      - name: Check the exact OMA square submission
         if: ${{ success() || steps.odd.outcome == 'failure' }}
         shell: bash
         run: |
-          cd formal-conjectures
-          timeout 600 lake env lean ../verification/H3_square.lean
+          set -euo pipefail
+          export OMA_FC="$PWD/formal-conjectures"
+          for reduction in verification/Erdos137*.R1.lean; do cp "$reduction" reductions/; done
+          proof=proofs/Erdos137.erdos_137.variants.perfect_power.R1.H3.R1.H1.lean
+          cp verification/H3_square.lean "$proof"
+          rc=0
+          bash tools/check.sh "$proof" "${RUNNER_TEMP}/erdos137-verdict.json" || rc=$?
+          python3 -m json.tool "${RUNNER_TEMP}/erdos137-verdict.json"
+          exit "$rc"
