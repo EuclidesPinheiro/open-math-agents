@@ -227,6 +227,7 @@ lemma dyadic_exponential_absorption (C : ℕ) (hC : C*22 ≤ 2^21) (e : ℕ) (he
     rw [show 21+d.succ = (21+d)+1 by omega,pow_succ]
     exact hStep.trans (by simpa only [mul_comm] using Nat.mul_le_mul_left 2 ih)
 
+set_option maxRecDepth 100000 in
 lemma dyadic_budget_arithmetic {k P e w : ℕ} (hk : 2097152 ≤ k)
     (hw : 128*w ≤ 26*k+857600*(e+1)) (hA : 93800*(e+1) ≤ k)
     (hB : 89520*(e+1) ≤ k) (hP : 168*P ≤ 8*w+13*k) :
@@ -262,16 +263,14 @@ lemma tail_from_prime_estimates (k : ℕ) (hk : 2^21 ≤ k)
       _ ≤ ∑ j ∈ range (e+1), (13*(k/2^j)+128*6700) := sum_le_sum (fun j _ => hPrimeCount _)
       _ = 13*(∑ j ∈ range (e+1), k/2^j)+128*6700*(e+1) := by
         simp only [sum_add_distrib, ← mul_sum, sum_const, card_range, nsmul_eq_mul, Nat.cast_id]
-        rw [Nat.mul_comm (e+1)]
+        rw [Nat.mul_comm (e+1), Nat.mul_assoc 128]
       _ ≤ _ := by
         simpa only [← Nat.mul_assoc] using Nat.add_le_add_right
           (Nat.mul_le_mul_left 13 (sum_dyadic_div_le k (e+1))) (128*6700*(e+1))
   have hKProd : k^P ≤ 2^w*primorial (k-1) := by
-    rw [primorial_eq_prod_primesLE, show 2^w = ∏ p ∈ (k-1).primesLE, 2^(dyadicHeight k p) by
-      exact (Finset.prod_pow_eq_pow_sum _ _ _).symm, ← Finset.prod_mul_distrib]
     calc
-      _ = ∏ _ ∈ (k-1).primesLE, k := by rw [prod_const, hProd]
-      _ ≤ _ := prod_le_prod' fun p hp => le_dyadic_height k p (mem_filter.mp hp).2.pos
+      _ = k^((k-1).primesLE.card) := by rw [hProd]
+      _ ≤ _ := pow_prime_card_le_mul_primorial k
   have hK8 : (k^P)^8 ≤ 2^(8*w+13*k) := by
     calc
       _ ≤ (2^w*primorial (k-1))^8 := pow_le_pow_left' hKProd _
@@ -297,11 +296,13 @@ lemma tail_from_prime_estimates (k : ℕ) (hk : 2^21 ≤ k)
   have hPower : (k^(P+1492))^12 ≤ 2^(23*k) := by
     have hh : ((k^(P+1492))^12)^8 ≤ (2^(23*k))^8 := by
       calc
-        _ = ((k^(P+1492))^8)^12 := by simp only [← pow_mul]; rfl
+        _ = ((k^(P+1492))^8)^12 := by simp only [← pow_mul, Nat.mul_assoc]
         _ ≤ (2^(8*w+13*k+8*1492*(e+1)))^12 := pow_le_pow_left' hQ _
         _ ≤ (2^(23*k))^8 := by
           rw [← pow_mul, ← pow_mul]
-          exact Nat.pow_le_pow_right (by decide) (by omega)
+          apply Nat.pow_le_pow_right (by decide)
+          rw [Nat.mul_comm _ 12, Nat.mul_comm _ 8]
+          exact hExp
     by_contra! h
     exact (not_lt_of_ge hh) (Nat.pow_lt_pow_left h (by decide))
   exact tail_rank_contradiction k P hk hP hCoeff hPower

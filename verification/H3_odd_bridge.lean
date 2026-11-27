@@ -332,7 +332,9 @@ lemma count_from_intervals_valid (ts : List ℕ) (start stop available n : ℕ) 
   have hMono : Monotone (fun t => (candidatePrefix t).card) := fun a b hab =>
     card_le_card (filter_subset_filter _ (range_mono hab))
   induction rows generalizing start available with
-  | nil => exact (hMono (by omega : n ≤ start)).trans hP
+  | nil =>
+    have hEnd : stop < start := hRows
+    exact (hMono (by omega : n ≤ start)).trans hP
   | cons row rs ih =>
     obtain ⟨hUpper,_,_,hInc,hNext⟩ := hRows
     by_cases h : n ≤ start
@@ -349,7 +351,7 @@ lemma primes_le_candidates (n : ℕ) : n.primesLE.card ≤ (candidatePrefix (n+1
   exact mem_filter.mpr ⟨mem_range.mpr (by omega), prime_is_fermat_candidate hPrime⟩
 
 lemma wheel_prime_count_upper (n : ℕ) : n.primesLE.card ≤ 211+48*((n+1)/210+1) := by
-  have hBase : 211.primeCounting' ≤ 211 := by
+  have hBase : (211:ℕ).primeCounting' ≤ 211 := by
     rw [← Nat.primesBelow_card_eq_primeCounting',Nat.primesBelow_eq_filter_range]
     exact (card_filter_le (s := range 211) Nat.Prime).trans_eq (card_range _)
   by_cases h : 211 ≤ n+1
@@ -482,6 +484,7 @@ private def dyadicRankIntervals : List RankInterval := [
   ⟨292039, 1162, 364⟩, ⟨296799, 1164, 371⟩, ⟨300000, 1165, 240⟩
 ]
 
+set_option maxRecDepth 10000 in
 private def analyticRankIntervals : List (ℕ × ℕ) := [
   (300060, 1165), (300121, 1165), (300182, 1165), (300243, 1165), (300306, 1165), (300370, 1165),
   (300434, 1165), (300499, 1165), (300564, 1165), (300630, 1165), (300697, 1165), (300765, 1165),

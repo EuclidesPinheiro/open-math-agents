@@ -176,6 +176,13 @@ def bottomRun (n : ℕ) : ℕ :=
 
 def scalingProduct : ℕ := 2^15*3^10*5^6
 
+private lemma group_four (a b x y : ℕ) : (a*x)*(b*y) = (a*b)*(x*y) := by ac_rfl
+
+private lemma group_six (a b c x y z : ℕ) :
+    (a*x)*(b*y)*(c*z) = (a*b*c)*(x*y*z) := by ac_rfl
+
+private lemma group_numerator (a b x y : ℕ) : (a*x)*(y*b) = (a*b)*(x*y) := by ac_rfl
+
 lemma factorial_run_upper (n d : ℕ) : factorialRun n d ≤ (n+d)^d := by
   unfold factorialRun
   calc
@@ -193,7 +200,7 @@ lemma top_run_upper (n : ℕ) : 30*topRun n ≤ (n+30)^31 := by
   unfold topRun
   rw [pow_succ (n+30) 30]
   calc
-    _ = factorialRun n 30*(30*(n/30+1)) := by ac_rfl
+    _ = factorialRun n 30*(30*(n/30+1)) := Nat.mul_left_comm _ _ _
     _ ≤ _ := h
 
 lemma scaled_factorial_run_lower (n d m : ℕ) (hd : 0 < d) :
@@ -223,7 +230,7 @@ lemma bottom_run_lower (n : ℕ) : n^31 ≤ scalingProduct*bottomRun n := by
         (Nat.mul_le_mul (scaled_factorial_run_lower n 2 15 (by decide))
           (scaled_factorial_run_lower n 3 10 (by decide)))
         (scaled_factorial_run_lower n 5 6 (by decide))
-    _ = _ := by unfold scalingProduct bottomRun; ac_rfl
+    _ = _ := group_six _ _ _ _ _ _
 
 lemma numerator_jump (n : ℕ) :
     factorialNumerator (n+30) = factorialNumerator n*topRun n := by
@@ -231,7 +238,7 @@ lemma numerator_jump (n : ℕ) :
   have hSmall : (n/30+1).factorial = (n/30+1)*(n/30).factorial := Nat.factorial_succ _
   unfold factorialNumerator topRun
   rw [hQuot, hSmall, factorial_extend n 30]
-  ac_rfl
+  exact group_numerator _ _ _ _
 
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 1500000 in
@@ -242,7 +249,22 @@ lemma denominator_jump (n : ℕ) :
     show (n+30)/3 = n/3+10 by omega,
     show (n+30)/5 = n/5+6 by omega,
     factorial_extend (n/2) 15,factorial_extend (n/3) 10,factorial_extend (n/5) 6]
-  ac_rfl
+  exact group_six _ _ _ _ _ _
+
+private lemma compare_scaled_runs (t u x y a b s c m q : ℕ)
+    (ht : c*t ≤ x) (hu : y ≤ s*u) (hScale : a*x ≤ b*y)
+    (hNumeric : s*b*m ≤ c*a*q) (hPos : 0 < c*a) : t*m ≤ u*q := by
+  apply Nat.le_of_mul_le_mul_left (c := c*a) _ hPos
+  calc
+    _ = (c*t)*(a*m) := by ac_rfl
+    _ ≤ x*(a*m) := Nat.mul_le_mul_right _ ht
+    _ = (a*x)*m := by ac_rfl
+    _ ≤ (b*y)*m := Nat.mul_le_mul_right _ hScale
+    _ = y*(b*m) := by ac_rfl
+    _ ≤ (s*u)*(b*m) := Nat.mul_le_mul_right _ hu
+    _ = (s*b*m)*u := by ac_rfl
+    _ ≤ (c*a*q)*u := Nat.mul_le_mul_right _ hNumeric
+    _ = _ := by ac_rfl
 
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 1500000 in
@@ -250,19 +272,15 @@ lemma run_ratio {n : ℕ} (hn : 5000 ≤ n) : topRun n*100^30 ≤ bottomRun n*25
   have hScaled : (5000*(n+30))^31 ≤ (5030*n)^31 := pow_le_pow_left' (by omega) _
   rw [mul_pow,mul_pow] at hScaled
   have hNumeric : scalingProduct*5030^31*100^30 ≤ 30*5000^31*253^30 := by decide
-  have hPos : 0 < 30*5000^31 := by decide
-  apply Nat.le_of_mul_le_mul_left (c := 30*5000^31) _ hPos
-  calc
-    _ = (30*topRun n)*(5000^31*100^30) := by ac_rfl
-    _ ≤ (n+30)^31*(5000^31*100^30) := Nat.mul_le_mul_right _ (top_run_upper n)
-    _ = (5000^31*(n+30)^31)*100^30 := by ac_rfl
-    _ ≤ (5030^31*n^31)*100^30 := Nat.mul_le_mul_right _ hScaled
-    _ = n^31*(5030^31*100^30) := by ac_rfl
-    _ ≤ (scalingProduct*bottomRun n)*(5030^31*100^30) :=
-      Nat.mul_le_mul_right _ (bottom_run_lower n)
-    _ = (scalingProduct*5030^31*100^30)*bottomRun n := by ac_rfl
-    _ ≤ (30*5000^31*253^30)*bottomRun n := Nat.mul_le_mul_right _ hNumeric
-    _ = _ := by ac_rfl
+  exact compare_scaled_runs (topRun n) (bottomRun n) ((n+30)^31) (n^31) (5000^31) (5030^31)
+    scalingProduct 30 (100^30) (253^30) (top_run_upper n) (bottom_run_lower n) hScaled hNumeric (by decide)
+
+private lemma cross_multiply_step (a b t u m q : ℕ) (h : t*m ≤ u*q) :
+    (a*t)*b*m ≤ (b*u)*a*q := by
+  have hL : (a*t)*b*m = (t*m)*(a*b) := by ac_rfl
+  have hR : (b*u)*a*q = (u*q)*(a*b) := by ac_rfl
+  rw [hL,hR]
+  exact Nat.mul_le_mul_right _ h
 
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 1500000 in
@@ -270,11 +288,7 @@ lemma factorial_ratio_growth {n : ℕ} (hn : 5000 ≤ n) :
     factorialNumerator (n+30)*factorialDenominator n*100^30 ≤
       factorialDenominator (n+30)*factorialNumerator n*253^30 := by
   rw [numerator_jump,denominator_jump]
-  calc
-    _ = (topRun n*100^30)*(factorialNumerator n*factorialDenominator n) := by ac_rfl
-    _ ≤ (bottomRun n*253^30)*(factorialNumerator n*factorialDenominator n) :=
-      Nat.mul_le_mul_right _ (run_ratio hn)
-    _ = _ := by ac_rfl
+  exact cross_multiply_step _ _ _ _ _ _ (run_ratio hn)
 
 private lemma factorial_run_lower (n r : ℕ) : (n+1)^r ≤ factorialRun n r := by
   unfold factorialRun
@@ -307,7 +321,7 @@ private lemma base_numerator_upper (r : ℕ) (hr : r < 30) :
     (5000:ℕ).factorial * (166:ℕ).factorial * (5029^r * 167^d)
   rw [hd, factorial_extend 5000 r, factorial_extend 166 d]
   calc
-    _ = ((5000:ℕ).factorial*(166:ℕ).factorial)*(factorialRun 5000 r*factorialRun 166 d) := by ac_rfl
+    _ = ((5000:ℕ).factorial*(166:ℕ).factorial)*(factorialRun 5000 r*factorialRun 166 d) := group_four _ _ _ _
     _ ≤ _ := Nat.mul_le_mul_left _ (Nat.mul_le_mul h1 h2)
 
 set_option maxRecDepth 10000 in
@@ -328,7 +342,7 @@ private lemma base_denominator_lower (r : ℕ) :
     _ ≤ (((2500:ℕ).factorial*(1666:ℕ).factorial)*(1000:ℕ).factorial)*(factorialRun 2500 d₂*factorialRun 1666 d₃*factorialRun 1000 d₅) :=
       Nat.mul_le_mul_left _ (Nat.mul_le_mul (Nat.mul_le_mul (factorial_run_lower 2500 d₂)
         (factorial_run_lower 1666 d₃)) (factorial_run_lower 1000 d₅))
-    _ = _ := by ac_rfl
+    _ = _ := (group_six _ _ _ _ _ _).symm
 
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 1500000 in
