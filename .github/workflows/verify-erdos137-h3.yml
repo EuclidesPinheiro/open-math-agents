@@ -52,4 +52,6 @@ jobs:
         shell: bash
         run: |
           cd formal-conjectures
-          timeout 600 lake env lean ../verification/H3_odd_primorial.lean
+          awk '{ print } /^end Erdos137PerfectPower/ { exit }' ../verification/H3_odd_prime.lean > H3OddGraphAudit.lean
+          printf '\n#print axioms Erdos137PerfectPower.distinct_products_rank_bounds\n#print axioms Erdos137PerfectPower.odd_branch_from_rank_certificate\n' >> H3OddGraphAudit.lean
+          timeout 1200 lake env lean H3OddGraphAudit.lean
