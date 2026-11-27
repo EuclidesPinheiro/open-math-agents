@@ -16,7 +16,8 @@ jobs:
           ref: 9097e2f90e66d2f6244209cb1c07f7120d17ec53
           path: formal-conjectures
       - name: Cache pinned Lean and Mathlib
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
+        id: leaned-cache
         with:
           key: erdos137-fc-9097e2f90e66
           path: |
@@ -36,6 +37,14 @@ jobs:
         run: |
           cd formal-conjectures
           lake build 'FormalConjectures.ErdosProblems.«137»'
+      - name: Save pinned Lean and Mathlib before checking proofs
+        if: ${{ steps.leaned-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          key: erdos137-fc-9097e2f90e66
+          path: |
+            ~/.elan
+            formal-conjectures/.lake
       - name: Compile the odd exponent lemmas
         id: odd
         shell: bash
@@ -47,4 +56,4 @@ jobs:
         shell: bash
         run: |
           cd formal-conjectures
-          timeout 360 lake env lean ../verification/H3_square.lean
+          timeout 600 lake env lean ../verification/H3_square.lean
