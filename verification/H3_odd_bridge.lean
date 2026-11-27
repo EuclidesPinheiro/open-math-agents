@@ -74,6 +74,7 @@ lemma sum_rank_gains (thresholds : List ℕ) (r : ℕ) :
       simp only [mem_filter,mem_range,mem_Ico]
       omega
     rw [hSet, Nat.card_Ico]
+    simp
   induction thresholds with
   | nil => simp [gainedExponent]
   | cons t ts ih =>
@@ -216,7 +217,8 @@ private lemma mod_pow_by_bits_eq (a e m fuel : ℕ) (h : e < 2^fuel) :
     simp only [modPowByBits,if_neg he,hRest,hRest']
     by_cases hEven : e%2 = 0
     · rw [if_pos hEven, show 2*(e/2) = e by omega]
-    · rw [if_neg hEven, show e = 2*(e/2)+1 by omega, pow_succ' a]
+    · rw [if_neg hEven]
+      conv_rhs => rw [show e = 2*(e/2)+1 by omega, pow_succ' a]
       calc
         _ = (a%m*(a^(2*(e/2))%m))%m := by rw [Nat.mul_mod a, Nat.mod_mod]
         _ = _ := (Nat.mul_mod a _ m).symm
@@ -427,12 +429,12 @@ private lemma dyadic_rank_thresholds_valid : RankThresholds dyadicRankThresholds
 
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-private lemma candidate_count_30001 : (candidatePrefix 30001).card ≤ 3265 := by decide
+private lemma candidate_count_30001 : (candidatePrefix 30001).card ≤ 3265 := by decide +kernel
 
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
 private lemma dyadic_rank_intervals_valid :
-    RankIntervals dyadicRankThresholds 30001 (2^21-1) 3265 dyadicRankIntervals := by decide
+    RankIntervals dyadicRankThresholds 30001 (2^21-1) 3265 dyadicRankIntervals := by decide +kernel
 
 theorem bridge_rank_product (k : ℕ) (hk₁ : 30001 ≤ k) (hk₂ : k < 2^21) :
     (k-1).factorial < ∏ i ∈ range (retainedCount k), rankBound (i+1) :=

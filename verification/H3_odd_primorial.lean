@@ -184,6 +184,8 @@ lemma factorial_run_upper (n d : ℕ) : factorialRun n d ≤ (n+d)^d := by
       omega)
     _ = _ := by simp
 
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 1500000 in
 lemma top_run_upper (n : ℕ) : 30*topRun n ≤ (n+30)^31 := by
   have hQuot : 30*(n/30+1) ≤ n+30 := by omega
   have h := Nat.mul_le_mul (factorial_run_upper n 30) hQuot
@@ -210,6 +212,8 @@ lemma scaled_factorial_run_lower (n d m : ℕ) (hd : 0 < d) :
       omega
     _ = _ := by rw [Finset.prod_mul_distrib,Finset.prod_const,Finset.card_range]
 
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 1500000 in
 lemma bottom_run_lower (n : ℕ) : n^31 ≤ scalingProduct*bottomRun n := by
   calc
     _ = (n^15*n^10)*n^6 := by rw [← pow_add,← pow_add]
@@ -229,6 +233,8 @@ lemma numerator_jump (n : ℕ) :
   rw [hQuot, hSmall, factorial_extend n 30]
   ac_rfl
 
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 1500000 in
 lemma denominator_jump (n : ℕ) :
     factorialDenominator (n+30) = factorialDenominator n*bottomRun n := by
   unfold factorialDenominator bottomRun
@@ -238,6 +244,8 @@ lemma denominator_jump (n : ℕ) :
     factorial_extend (n/2) 15,factorial_extend (n/3) 10,factorial_extend (n/5) 6]
   ac_rfl
 
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 1500000 in
 lemma run_ratio {n : ℕ} (hn : 5000 ≤ n) : topRun n*100^30 ≤ bottomRun n*253^30 := by
   have hScaled : (5000*(n+30))^31 ≤ (5030*n)^31 := pow_le_pow_left' (by omega) _
   rw [mul_pow,mul_pow] at hScaled
@@ -256,6 +264,8 @@ lemma run_ratio {n : ℕ} (hn : 5000 ≤ n) : topRun n*100^30 ≤ bottomRun n*25
     _ ≤ (30*5000^31*253^30)*bottomRun n := Nat.mul_le_mul_right _ hNumeric
     _ = _ := by ac_rfl
 
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 1500000 in
 lemma factorial_ratio_growth {n : ℕ} (hn : 5000 ≤ n) :
     factorialNumerator (n+30)*factorialDenominator n*100^30 ≤
       factorialDenominator (n+30)*factorialNumerator n*253^30 := by
@@ -271,8 +281,10 @@ set_option maxHeartbeats 0 in
 lemma factorial_ratio_base : ∀ r : Fin 30,
     factorialNumerator (5000+r.val)*100^(5000+r.val) ≤
       factorialDenominator (5000+r.val)*253^(5000+r.val) := by
-  decide
+  decide +kernel
 
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 1500000 in
 theorem factorial_ratio_upper {n : ℕ} (hn : 5000 ≤ n) :
     factorialNumerator n*100^n ≤ factorialDenominator n*253^n := by
   induction n using Nat.strong_induction_on with
@@ -299,6 +311,8 @@ theorem factorial_ratio_upper {n : ℕ} (hn : 5000 ≤ n) :
           Nat.mul_le_mul_left _ hPrev
         _ = _ := by ac_rfl
 
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 1500000 in
 lemma band_product_upper {n : ℕ} (hn : 5000 ≤ n) :
     (primeBandProduct n : ℚ) ≤ (253/100 : ℚ)^n := by
   have hD := factorial_ratio_contains_prime_band n
@@ -320,16 +334,36 @@ set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
 lemma small_primorial_band_bounds :
     ∀ b ∈ smallPrimorialBands, primorial b.2 * 20^b.1 ≤ 61^b.1 := by
-  decide
+  decide +kernel
 
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma small_primorial_band_cover :
-    ∀ r : Fin 5000, ∃ b ∈ smallPrimorialBands, b.1 ≤ r.val ∧ r.val ≤ b.2 := by
-  decide
+private def PrimorialBandCover (start : ℕ) : List (ℕ × ℕ) → Prop
+  | [] => 5000 ≤ start
+  | b :: bs => b.1 = start ∧ start ≤ b.2 ∧ PrimorialBandCover (b.2+1) bs
+
+private instance (start : ℕ) (bands : List (ℕ × ℕ)) :
+    Decidable (PrimorialBandCover start bands) := by
+  induction bands generalizing start with
+  | nil => unfold PrimorialBandCover; infer_instance
+  | cons b bs ih =>
+    unfold PrimorialBandCover
+    letI := ih (b.2+1)
+    infer_instance
+
+private lemma primorial_band_cover_of_chain (start r : ℕ) (bands : List (ℕ × ℕ))
+    (hChain : PrimorialBandCover start bands) (hStart : start ≤ r) (hR : r < 5000) :
+    ∃ b ∈ bands, b.1 ≤ r ∧ r ≤ b.2 := by
+  induction bands generalizing start with
+  | nil => exact (not_lt_of_ge (hChain.trans hStart) hR).elim
+  | cons b bs ih =>
+    rcases hChain with ⟨hL,_,hNext⟩
+    by_cases h : r ≤ b.2
+    · exact ⟨b,List.mem_cons_self,by omega,h⟩
+    · obtain ⟨z,hB,h₁,h₂⟩ := ih (b.2+1) hNext (by omega)
+      exact ⟨z,List.mem_cons_of_mem _ hB,h₁,h₂⟩
 
 lemma primorial_base (r : Fin 5000) : primorial r.val * 20^r.val ≤ 61^r.val := by
-  rcases small_primorial_band_cover r with ⟨b, hb, hlo, hhi⟩
+  obtain ⟨b,hb,hlo,hhi⟩ := primorial_band_cover_of_chain 0 r.val smallPrimorialBands
+    (by decide) (Nat.zero_le _) r.isLt
   have h : primorial b.2 * 20^b.1 ≤ 61^b.1 := small_primorial_band_bounds b hb
   have hd : r.val = b.1 + (r.val-b.1) := by omega
   have hpow : (20 : ℕ)^(r.val-b.1) ≤ 61^(r.val-b.1) := pow_le_pow_left' (by decide) _
@@ -340,6 +374,8 @@ lemma primorial_base (r : Fin 5000) : primorial r.val * 20^r.val ≤ 61^r.val :=
     _ ≤ 61^b.1 * 61^(r.val-b.1) := Nat.mul_le_mul h hpow
     _ = _ := by rw [← pow_add,← hd]
 
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 1500000 in
 theorem primorial_le_61_over_20 (n : ℕ) :
     (primorial n : ℚ) ≤ (61/20 : ℚ)^n := by
   induction n using Nat.strong_induction_on with
@@ -368,6 +404,8 @@ theorem primorial_le_61_over_20 (n : ℕ) :
           _ = _ := pow_mul _ _ _
       exact le_of_pow_le_pow_left₀ (by decide : 6 ≠ 0) (by positivity) hPower
 
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 1500000 in
 theorem primorial_eighth_le (n : ℕ) : (primorial n)^8 ≤ 2^(13*n) := by
   have h : (primorial n : ℚ)^8 ≤ (2:ℚ)^(13*n) := by
     calc
@@ -381,6 +419,8 @@ set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
 lemma prime_count_65536 : (Nat.primesLE 65536).card = 6542 := by decide
 
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 1500000 in
 lemma prime_count_linear (n : ℕ) :
     128*n.primesLE.card ≤ 13*n+128*6542 := by
   let P := n.primesLE

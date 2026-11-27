@@ -65,7 +65,8 @@ lemma tail_rank_contradiction (k P : ℕ) (hk : 2^21 ≤ k) (hP : P ≤ k)
   have hStrict : (k:ℚ)^(P+1492) < (21701/5000 : ℚ)^d := by
     apply lt_of_pow_lt_pow_left₀ 120 (by positivity)
     calc
-      ((k:ℚ)^(P+1492))^120 = (((k:ℚ)^(P+1492))^12)^10 := by simp only [← pow_mul]; rfl
+      ((k:ℚ)^(P+1492))^120 = (((k:ℚ)^(P+1492))^12)^10 := by
+        simp only [← pow_mul, Nat.mul_assoc]
       _ ≤ ((2:ℚ)^(23*k))^10 := pow_le_pow_left₀ (by positivity) hPowerQ _
       _ = ((2:ℚ)^230)^k := by rw [← pow_mul, ← pow_mul]; congr 1; omega
       _ < ((21701/5000 : ℚ)^109)^k := pow_lt_pow_left₀ hStep (by positivity) (by omega)
@@ -163,7 +164,16 @@ lemma dyadic_exponential_absorption (C : ℕ) (hC : C*22 ≤ 2^21) (e : ℕ) (he
     rw [show 21+d.succ = (21+d)+1 by omega,pow_succ]
     exact hStep.trans (by simpa only [mul_comm] using Nat.mul_le_mul_left 2 ih)
 
+lemma dyadic_budget_arithmetic {k P e w : ℕ} (hk : 2097152 ≤ k)
+    (hw : 128*w ≤ 26*k+837376*(e+1)) (hA : 91588*(e+1) ≤ k)
+    (hB : 89520*(e+1) ≤ k) (hP : 168*P ≤ 8*w+13*k) :
+    120*(P+1492) ≤ 11*k ∧ 12*(8*w+13*k+11936*(e+1)) ≤ 184*k := by
+  have hw' : 448*w ≤ 123*k := by omega
+  have hp' : 9408*P ≤ 851*k := by omega
+  exact ⟨by omega, by omega⟩
+
 set_option maxRecDepth 10000 in
+set_option maxHeartbeats 1000000 in
 lemma tail_from_prime_estimates (k : ℕ) (hk : 2^21 ≤ k)
     (hPrimorial : ∀ n : ℕ, (primorial n)^8 ≤ 2^(13*n))
     (hPrimeCount : ∀ n : ℕ, 128*n.primesLE.card ≤ 13*n+128*6542) :
@@ -188,9 +198,9 @@ lemma tail_from_prime_estimates (k : ℕ) (hk : 2^21 ≤ k)
       _ = ∑ j ∈ range (e+1), 128*(k/2^j).primesLE.card := by rw [mul_sum]
       _ ≤ ∑ j ∈ range (e+1), (13*(k/2^j)+128*6542) := sum_le_sum (fun j _ => hPrimeCount _)
       _ = 13*(∑ j ∈ range (e+1), k/2^j)+128*6542*(e+1) := by
-        rw [sum_add_distrib, ← mul_sum, sum_const, card_range, nsmul_eq_mul]
-        ac_rfl
-      _ ≤ _ := by have := sum_dyadic_div_le k (e+1); omega
+        simp only [sum_add_distrib, ← mul_sum, sum_const, card_range, nsmul_eq_mul, Nat.cast_id]
+        rw [Nat.mul_comm (e+1)]
+      _ ≤ _ := Nat.add_le_add_right (Nat.mul_le_mul_left 13 (sum_dyadic_div_le k (e+1))) _
   have hKProd : k^P ≤ 2^w*primorial (k-1) := by
     rw [primorial_eq_prod_primesLE, show 2^w = ∏ p ∈ (k-1).primesLE, 2^(dyadicHeight k p) by
       exact (Finset.prod_pow_eq_pow_sum _ _ _).symm, ← Finset.prod_mul_distrib]
@@ -210,8 +220,8 @@ lemma tail_from_prime_estimates (k : ℕ) (hk : 2^21 ≤ k)
     rw [← pow_mul] at hh
     by_contra! h
     exact (not_lt_of_ge hh) (Nat.pow_lt_pow_right (by decide) (by omega))
-  have hCoeff : 120*(P+1492) ≤ 11*k := by omega
-  have hExp : 12*(8*w+13*k+8*1492*(e+1)) ≤ 8*(23*k) := by omega
+  obtain ⟨hCoeff,hExp⟩ := dyadic_budget_arithmetic (k := k) (P := P) (e := e) (w := w) hk
+    hW hAbsorb hOffset hPi
   have hQ : (k^(P+1492))^8 ≤ 2^(8*w+13*k+8*1492*(e+1)) := by
     have hKExtra : (k^1492)^8 ≤ 2^(8*1492*(e+1)) := by
       calc
@@ -227,7 +237,8 @@ lemma tail_from_prime_estimates (k : ℕ) (hk : 2^21 ≤ k)
         _ ≤ (2^(23*k))^8 := by
           rw [← pow_mul, ← pow_mul]
           exact Nat.pow_le_pow_right (by decide) (by omega)
-    exact le_of_pow_le_pow_left' (by decide : 8 ≠ 0) hh
+    by_contra! h
+    exact (not_lt_of_ge hh) (Nat.pow_lt_pow_left h (by decide))
   exact tail_rank_contradiction k P hk hP hCoeff hPower
 
 end Erdos137OddTail
