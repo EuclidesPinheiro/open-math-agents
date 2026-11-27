@@ -438,7 +438,7 @@ theorem normalize_square_coefficients {n k : ℕ}
   classical
   have hSize : k ^ 2 < n := by
     obtain ⟨p, hp, hkp, hProd⟩ := hSylvester
-    obtain ⟨t, ht, hpt⟩ := (Prime.dvd_finset_prod_iff hp.prime _).1 hProd
+    obtain ⟨t, ht, hpt⟩ := (Prime.dvd_finsetProd_iff hp.prime _).1 hProd
     have hBounds := mem_Ioc.mp ht
     have ht0 : t ≠ 0 := by omega
     have hDiv := hAll p hkp.le hp
@@ -541,7 +541,7 @@ lemma div_le_factorial_valuation (k p : ℕ) : k / p ≤ factorialValuation k p 
   | zero => simp [factorialValuation, factorialValuationAux]
   | succ k =>
     rw [factorialValuation, factorialValuationAux, if_neg (Nat.succ_ne_zero k)]
-    omega
+    exact Nat.le_add_right (k.succ / p) (factorialValuationAux p k (k.succ / p))
 
 lemma ceiling_eq_div_add_one {k p : ℕ} (hk : 0 < k) (hp : 0 < p) :
     (k+p-1)/p = (k-1)/p + 1 := by
@@ -610,7 +610,7 @@ theorem quadratic_block_inequality (r : Fin 650) (q : ℕ) :
   | zero =>
     have hBase := base_block_certificate r
     dsimp
-    simp only [Nat.zero_mul, Nat.add_zero, pow_zero, Nat.mul_one]
+    simp only [Nat.mul_one]
     rw [show 676 + r.val - 2 = 674 + r.val by omega,
       show 676 + r.val - 1 = 675 + r.val by omega]
     exact hBase
@@ -744,7 +744,11 @@ lemma odd_even_multiplicities_card (n k p : ℕ) :
       evenMultiplicities n k p := by
     ext t
     simp only [evenMultiplicities, mem_filter]
-    omega
+    constructor
+    · rintro ⟨ht, hEven⟩
+      exact ⟨ht, by omega⟩
+    · rintro ⟨ht, hEven⟩
+      exact ⟨ht, by omega⟩
   rw [hEven] at hC
   simpa [oddMultiplicities] using hC
 
@@ -866,7 +870,8 @@ lemma factorial_valuation_sum (p fuel k : ℕ) :
       change k / p + factorialValuationAux p fuel (k / p) = _
       rw [ih, Finset.sum_range_succ']
       simp only [Nat.zero_add, pow_one]
-      congr 1
+      rw [Nat.add_comm (k / p)]
+      refine congrArg (fun value : ℕ => value + k / p) ?_
       apply Finset.sum_congr rfl
       intro j _
       change k / p / p ^ (j + 1) = k / p ^ (j + 1 + 1)
