@@ -55,11 +55,12 @@ lemma large_prime_factorization_single {k n p t : ℕ}
   · intro hMissing
     exact (hMissing ht).elim
 
-theorem sylvester_schur_lower_bound_of_no_witness {k n l : ℕ}
+theorem sylvester_schur_power_bounds_of_no_witness {k n l : ℕ}
     (hl : 2 ≤ l)
     (hSylvester : ∃ p : ℕ, p.Prime ∧ k < p ∧ p ∣ ∏ m ∈ Ioc n (n + k), m)
     (hAll : ∀ p : ℕ, k ≤ p → p.Prime →
-      l ∣ (∏ m ∈ Ioc n (n + k), m).factorization p) : k ^ l < n := by
+      l ∣ (∏ m ∈ Ioc n (n + k), m).factorization p) :
+    k ^ l < n ∧ (k + 1) ^ l ≤ n + k := by
   obtain ⟨p, hp, hkp, hProd⟩ := hSylvester
   obtain ⟨m, hm, hpm⟩ := (Prime.dvd_finsetProd_iff hp.prime _).mp hProd
   have hmBounds := mem_Ioc.mp hm
@@ -68,7 +69,16 @@ theorem sylvester_schur_lower_bound_of_no_witness {k n l : ℕ}
   rw [large_prime_factorization_single hkp.le hm hpm] at hDiv
   have hPos := hp.factorization_pos_of_dvd hmNonzero hpm
   have hPow := (hp.pow_dvd_iff_le_factorization hmNonzero).2 (Nat.le_of_dvd hPos hDiv)
-  exact sylvester_schur_lower_bound hl hkp hm hPow
+  refine ⟨sylvester_schur_lower_bound hl hkp hm hPow, ?_⟩
+  exact (pow_le_pow_left' (show k + 1 ≤ p by omega) l).trans
+    ((Nat.le_of_dvd (Nat.pos_of_ne_zero hmNonzero) hPow).trans hmBounds.2)
+
+theorem sylvester_schur_lower_bound_of_no_witness {k n l : ℕ}
+    (hl : 2 ≤ l)
+    (hSylvester : ∃ p : ℕ, p.Prime ∧ k < p ∧ p ∣ ∏ m ∈ Ioc n (n + k), m)
+    (hAll : ∀ p : ℕ, k ≤ p → p.Prime →
+      l ∣ (∏ m ∈ Ioc n (n + k), m).factorization p) : k ^ l < n :=
+  (sylvester_schur_power_bounds_of_no_witness hl hSylvester hAll).1
 
 lemma cube_gap {x l : ℕ} (hl : 3 ≤ l) :
     x ^ l + 3 * x ^ (l - 1) ≤ (x + 1) ^ l := by
@@ -274,6 +284,168 @@ lemma factorization_mul_power_mod {l a x : ℕ} (ha : a ≠ 0) (hx : x ≠ 0) (p
   change (a.factorization p + l * x.factorization p) % l = a.factorization p % l
   rw [Nat.add_mul_mod_self_left]
 
+-- The upper bound from Sylvester–Schur lets us compare ratios using only
+-- integer powers, including when the product contains more than two terms.
+lemma scaled_power_gap_in_interval {n k l d c x y : ℕ}
+    (hk : 0 < k) (hn : k ^ 2 ≤ n) (hTop : (k + 1) ^ l ≤ n + k)
+    (hd : d < l) (hc : 0 < c)
+    (hX : n ^ d ≤ c * x ^ l) (hY : c * y ^ l ≤ (n + k) ^ d)
+    (hxy : x < y) : False := by
+  have hl : l ≠ 0 := by omega
+  have hyPow : y ^ l ≤ (n + k) ^ d := by
+    have h := Nat.mul_le_mul_right (y ^ l) hc
+    rw [Nat.one_mul] at h
+    exact h.trans hY
+  have hyTop : y * (k + 1) ≤ n + k := (Nat.pow_le_pow_iff_left hl).1 (by
+    calc
+      (y * (k + 1)) ^ l = y ^ l * (k + 1) ^ l := mul_pow _ _ _
+      _ ≤ (n + k) ^ d * (n + k) := Nat.mul_le_mul hyPow hTop
+      _ = (n + k) ^ (d + 1) := (pow_succ _ _).symm
+      _ ≤ (n + k) ^ l := pow_le_pow_right' (by omega) (by omega))
+  have hky : k * y ≤ n := by
+    by_cases hy : k ≤ y
+    · nlinarith only [hyTop, hy]
+    · exact (Nat.mul_le_mul_left k (by omega : y ≤ k)).trans (by simpa [pow_two] using hn)
+  have hRatio : x * (n + k) < y * n := by
+    have hStep := Nat.mul_le_mul_right (n+k) (show x+1 ≤ y by omega)
+    nlinarith only [hStep, hky, hk]
+  have hPowered := (Nat.pow_lt_pow_iff_left hl).2 hRatio
+  simp only [mul_pow] at hPowered
+  have hComparison : y ^ l * n ^ d ≤ x ^ l * (n + k) ^ d := by
+    apply Nat.le_of_mul_le_mul_left _ hc
+    calc
+      c * (y ^ l * n ^ d) = n ^ d * (c * y ^ l) := by ac_rfl
+      _ ≤ (c * x ^ l) * (n + k) ^ d := Nat.mul_le_mul hX hY
+      _ = c * (x ^ l * (n + k) ^ d) := by ac_rfl
+  have hLift := Nat.mul_le_mul hComparison (pow_le_pow_left' (show n ≤ n+k by omega) (l-d))
+  have hExp : d + (l-d) = l := by omega
+  simp only [Nat.mul_assoc, ← pow_add, hExp] at hLift
+  exact (not_lt_of_ge hLift) hPowered
+
+lemma scaled_power_eq_of_in_product_interval {n k l d A B : ℕ}
+    (hk : 0 < k) (hn : k ^ 2 ≤ n) (hTop : (k + 1) ^ l ≤ n + k) (hd : d < l)
+    (hA : n ^ d ≤ A ∧ A ≤ (n + k) ^ d) (hB : n ^ d ≤ B ∧ B ≤ (n + k) ^ d)
+    (heq : ∀ p : ℕ, p.Prime → A.factorization p % l = B.factorization p % l) : A = B := by
+  obtain ⟨c, x, y, hc, hX, hY⟩ := two_power_remainders (by omega) heq
+  have hxy : x = y := by
+    rcases lt_trichotomy x y with hlt | he | hgt
+    · exact (scaled_power_gap_in_interval hk hn hTop hd (Nat.pos_of_ne_zero hc)
+        (hX ▸ hA.1) (hY ▸ hB.2) hlt).elim
+    · exact he
+    · exact (scaled_power_gap_in_interval hk hn hTop hd (Nat.pos_of_ne_zero hc)
+        (hY ▸ hB.1) (hX ▸ hA.2) hgt).elim
+  rw [hX, hY, hxy]
+
+lemma gcd_block_multiset_product_le {n k i : ℕ} (hi : i ∈ Icc 1 k)
+    (s : Multiset ℕ) (hs : ∀ j ∈ s, j ∈ Icc 1 k) (hne : i ∉ s) :
+    (n + i).gcd (s.map (n + ·)).prod ≤ k ^ s.card := by
+  have hiB := mem_Icc.mp hi
+  have hiPos : 0 < n+i := by omega
+  induction s using Multiset.induction_on with
+  | empty => simp
+  | cons j s ih =>
+    have hj := mem_Icc.mp (hs j (Multiset.mem_cons_self _ _))
+    have hji : i ≠ j := by
+      rintro rfl
+      exact hne (Multiset.mem_cons_self _ _)
+    have hGCD : (n+i).gcd (n+j) ≤ k := by
+      have hI := Nat.gcd_dvd_left (n+i) (n+j)
+      have hJ := Nat.gcd_dvd_right (n+i) (n+j)
+      rcases lt_or_gt_of_ne hji with hlt | hgt
+      · exact (Nat.le_of_dvd (show 0 < (n+j)-(n+i) by omega) (Nat.dvd_sub hJ hI)).trans (by omega)
+      · exact (Nat.le_of_dvd (show 0 < (n+i)-(n+j) by omega) (Nat.dvd_sub hI hJ)).trans (by omega)
+    have hTail := ih (fun t ht => hs t (Multiset.mem_cons_of_mem ht))
+      (fun h => hne (Multiset.mem_cons_of_mem h))
+    let M := (s.map (n+·)).prod
+    have hd := Nat.gcd_mul_right_dvd_mul_gcd (n+i) (n+j) M
+    have hPos : 0 < (n+i).gcd (n+j) * (n+i).gcd M :=
+      Nat.mul_pos (Nat.gcd_pos_of_pos_left _ hiPos) (Nat.gcd_pos_of_pos_left _ hiPos)
+    rw [Multiset.map_cons, Multiset.prod_cons, Multiset.card_cons, pow_succ']
+    exact (Nat.le_of_dvd hPos hd).trans (Nat.mul_le_mul hGCD hTail)
+
+lemma block_multiset_prod_injective {n k l : ℕ} (hk : 0 < k) (hn : k^l < n)
+    (s t : Multiset ℕ) (hs : ∀ i ∈ s, i ∈ Icc 1 k) (ht : ∀ i ∈ t, i ∈ Icc 1 k)
+    (hCard : s.card = t.card) (hl : s.card < l)
+    (heq : (s.map (n + ·)).prod = (t.map (n + ·)).prod) :
+    s = t := by
+  induction s using Multiset.induction_on generalizing t with
+  | empty => exact (Multiset.card_eq_zero.mp (by simpa using hCard.symm)).symm
+  | cons i s ih =>
+    have hi := hs i (Multiset.mem_cons_self _ _)
+    have hiPos : 0 < n+i := by have := (mem_Icc.mp hi).1; omega
+    have hiT : i ∈ t := by
+      by_contra hAbsent
+      have hG := gcd_block_multiset_product_le hi t ht hAbsent
+      have hD : n+i ∣ (t.map (n+·)).prod := by
+        rw [← heq, Multiset.map_cons, Multiset.prod_cons]
+        exact dvd_mul_right _ _
+      rw [Nat.gcd_eq_left_iff_dvd.mpr hD] at hG
+      have hPow : k ^ t.card ≤ k ^ l :=
+        pow_le_pow_right' (by omega : 1 ≤ k) (by omega)
+      omega
+    let u := t.erase i
+    have hu : i ::ₘ u = t := Multiset.cons_erase hiT
+    have huData : ∀ j ∈ u, j ∈ Icc 1 k :=
+      fun j hj => ht j (Multiset.mem_of_mem_erase hj)
+    rw [← hu] at hCard heq ⊢
+    simp only [Multiset.card_cons, Multiset.map_cons, Multiset.prod_cons] at hCard heq
+    have hl' : s.card < l := by
+      have h := Multiset.card_cons i s
+      omega
+    have hTail := ih u (fun j hj => hs j (Multiset.mem_cons_of_mem hj)) huData
+      (by omega) hl' (Nat.mul_left_cancel hiPos heq)
+    rw [hTail]
+
+lemma multiset_prod_block_repr {n k l : ℕ} {a x : ℕ → ℕ}
+    (hRepr : ∀ i ∈ Icc 1 k, n+i = a i * x i ^ l)
+    (s : Multiset ℕ) (hs : ∀ i ∈ s, i ∈ Icc 1 k) :
+    (s.map (n+·)).prod = (s.map a).prod * (s.map x).prod ^ l := by
+  induction s using Multiset.induction_on with
+  | empty => simp
+  | cons i s ih =>
+    simp only [Multiset.map_cons, Multiset.prod_cons]
+    rw [hRepr i (hs i (Multiset.mem_cons_self _ _)),
+      ih (fun j hj => hs j (Multiset.mem_cons_of_mem hj)), mul_pow]
+    ac_rfl
+
+theorem distinct_multiset_products_mod_l {n k l : ℕ} {a x : ℕ → ℕ}
+    (hk : 0 < k) (hn : k^l < n) (hl : 2 ≤ l) (hTop : (k+1)^l ≤ n+k)
+    (hRepr : ∀ i ∈ Icc 1 k, n+i = a i * x i ^ l)
+    (s t : Multiset ℕ) (hs : ∀ i ∈ s, i ∈ Icc 1 k) (ht : ∀ i ∈ t, i ∈ Icc 1 k)
+    (hCard : s.card = t.card) (hSmall : s.card < l)
+    (hMod : ∀ p : ℕ, p.Prime →
+      (s.map a).prod.factorization p % l = (t.map a).prod.factorization p % l) :
+    s = t := by
+  have hn0 : 0 < n := by omega
+  have hSq : k^2 ≤ n := (pow_le_pow_right' (by omega : 1 ≤ k) hl).trans hn.le
+  have hBounds (u : Multiset ℕ) (hu : ∀ i ∈ u, i ∈ Icc 1 k) :
+      n^u.card ≤ (u.map (n+·)).prod ∧ (u.map (n+·)).prod ≤ (n+k)^u.card := by
+    have hLo := Multiset.pow_card_le_prod (s := u.map (n+·)) (a := n) (by
+      intro v hv
+      obtain ⟨i, _, rfl⟩ := Multiset.mem_map.mp hv
+      omega)
+    have hHi := Multiset.prod_le_pow_card (u.map (n+·)) (n+k) (by
+      intro v hv
+      obtain ⟨i, hi, rfl⟩ := Multiset.mem_map.mp hv
+      have := (mem_Icc.mp (hu i hi)).2
+      omega)
+    simpa only [Multiset.card_map] using And.intro hLo hHi
+  have hFac (u : Multiset ℕ) (hu : ∀ i ∈ u, i ∈ Icc 1 k) (p : ℕ) :
+      (u.map (n+·)).prod.factorization p % l = (u.map a).prod.factorization p % l := by
+    have hPos := ((pow_pos hn0 u.card).trans_le (hBounds u hu).1).ne'
+    have hId := multiset_prod_block_repr hRepr u hu
+    rw [hId] at hPos ⊢
+    have ha : (u.map a).prod ≠ 0 := fun h => hPos (by rw [h, zero_mul])
+    have hx : (u.map x).prod ≠ 0 := fun h => hPos (by rw [h, zero_pow (by omega : l ≠ 0), mul_zero])
+    exact factorization_mul_power_mod ha hx p
+  apply block_multiset_prod_injective hk hn s t hs ht hCard hSmall
+  have htBounds := hBounds t ht
+  rw [← hCard] at htBounds
+  apply scaled_power_eq_of_in_product_interval hk hSq hTop hSmall (hBounds s hs) htBounds
+  intro p hp
+  rw [hFac s hs p, hFac t ht p]
+  exact hMod p hp
+
 theorem distinct_pair_products_mod_l {n k l : ℕ} {a x : ℕ → ℕ}
     (hk : 0 < k) (hn : k ^ l < n) (hl : 3 ≤ l)
     (hRepr : ∀ i ∈ Icc 1 k, n + i = a i * x i ^ l)
@@ -355,7 +527,7 @@ lemma interval_distances_dvd_factorial {n k m : ℕ} (hm : m ∈ Ioc n (n + k)) 
       · intro hd
         exact ⟨m-d, by omega, by omega⟩
     calc
-      _ = ∏ t ∈ Ioo n m, m-t := by
+      _ = ∏ t ∈ Ioo n m, (m-t) := by
         refine Finset.prod_congr rfl (fun t ht => ?_)
         have := (mem_Ioo.mp ht).2
         omega
@@ -377,7 +549,7 @@ lemma interval_distances_dvd_factorial {n k m : ℕ} (hm : m ∈ Ioc n (n + k)) 
       · intro hd
         exact ⟨m+d, by omega, by omega⟩
     calc
-      _ = ∏ t ∈ Ioc m (n+k), t-m := by
+      _ = ∏ t ∈ Ioc m (n+k), (t-m) := by
         refine Finset.prod_congr rfl (fun t ht => ?_)
         have := (mem_Ioc.mp ht).1
         omega
