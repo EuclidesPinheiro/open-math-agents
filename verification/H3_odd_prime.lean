@@ -863,6 +863,112 @@ theorem factor_cover_card_of_distinct_products (S U V : Finset ℕ)
   rw [Finset.card_powersetCard] at hRest
   exact hCard ▸ Nat.add_le_add hFirst hRest
 
+theorem product_lower_bound_from_maxima (S : Finset ℕ) (lower : ℕ → ℕ)
+    (hMax : ∀ T ⊆ S, ∀ z ∈ T, (∀ t ∈ T, t ≤ z) → lower T.card ≤ z) :
+    (∏ i ∈ range S.card, lower (i+1)) ≤ ∏ s ∈ S, s := by
+  generalize h : S.card = m
+  induction m using Nat.strong_induction_on generalizing S with
+  | h m ih =>
+    by_cases hm : m = 0
+    · have hEmpty : S = ∅ := Finset.card_eq_zero.mp (h.trans hm)
+      simp [hEmpty, hm]
+    · have hS : S.Nonempty := card_pos.mp (by omega)
+      let z := S.max' hS
+      have hz : z ∈ S := max'_mem _ _
+      let T := S.erase z
+      have hT : T.card = m - 1 := by simp [T, card_erase_of_mem hz, h]
+      have hTail := ih (m-1) (by omega) T
+        (fun U hUT x hx hxMax => hMax U (hUT.trans (erase_subset z S)) x hx hxMax) hT
+      have hLast := hMax S (Subset.refl _) z hz (fun t ht => le_max' _ _ ht)
+      rw [h] at hLast
+      have hProd : (∏ s ∈ S, s) = z * ∏ s ∈ T, s := (Finset.mul_prod_erase S id hz).symm
+      rw [hProd, show m = (m-1)+1 by omega, Finset.prod_range_succ]
+      rw [show m-1+1 = m by omega]
+      exact (Nat.mul_le_mul hTail hLast).trans_eq (Nat.mul_comm _ _)
+
+theorem odd_branch_of_coefficient_product_bound {n k l : ℕ} (hk : 3 ≤ k) (hl : 3 ≤ l)
+    (hSylvester : ∃ p : ℕ, p.Prime ∧ k < p ∧ p ∣ ∏ t ∈ Ioc n (n+k), t)
+    (hLower : ∀ A : Finset ℕ, 0 ∉ A → k - ((range k).filter Nat.Prime).card ≤ A.card →
+      (∀ a ∈ A, ∀ b ∈ A, ∀ c ∈ A, ∀ d ∈ A, a*b = c*d →
+        (a = c ∧ b = d) ∨ (a = d ∧ b = c)) →
+      (k-1).factorial < ∏ t ∈ A, t) :
+    ∃ p : ℕ, k ≤ p ∧ p.Prime ∧ ¬ l ∣ (∏ t ∈ Ioc n (n+k), t).factorization p := by
+  by_contra! hAll
+  obtain ⟨hN,hTop⟩ := sylvester_schur_power_bounds_of_no_witness (by omega) hSylvester hAll
+  obtain ⟨a,x,ha,hRepr,hSupport,_⟩ := normalize_odd_coefficients (by omega) hAll
+  let R := Ioc n (n+k)
+  let b := fun t : ℕ => a (t-n)
+  have hIndex (t : ℕ) (ht : t ∈ R) : t-n ∈ Icc 1 k := by
+    have h := mem_Ioc.mp ht
+    exact mem_Icc.mpr ⟨by omega, by omega⟩
+  have hDvd (t : ℕ) (ht : t ∈ R) : b t ∣ t := by
+    have h := mem_Ioc.mp ht
+    have heq := hRepr (t-n) (hIndex t ht)
+    rw [Nat.add_sub_of_le h.1.le] at heq
+    exact ⟨x (t-n)^l, heq⟩
+  obtain ⟨S,hS,hCount,hProduct⟩ := restricted_prod_dvd_factorial n k b (by omega)
+    hDvd (fun t ht => hSupport (t-n) (hIndex t ht))
+  have hPairs {i j u v : ℕ} (hi : i ∈ Icc 1 k) (hj : j ∈ Icc 1 k)
+      (hu : u ∈ Icc 1 k) (hv : v ∈ Icc 1 k) (heq : a i*a j = a u*a v) :
+      (i=u ∧ j=v) ∨ (i=v ∧ j=u) := by
+    let A : Multiset ℕ := i ::ₘ {j}
+    let B : Multiset ℕ := u ::ₘ {v}
+    have hA : ∀ t ∈ A, t ∈ Icc 1 k := by
+      intro t ht
+      simp only [A, Multiset.mem_cons, Multiset.mem_singleton] at ht
+      rcases ht with rfl | rfl
+      · exact hi
+      · exact hj
+    have hB : ∀ t ∈ B, t ∈ Icc 1 k := by
+      intro t ht
+      simp only [B, Multiset.mem_cons, Multiset.mem_singleton] at ht
+      rcases ht with rfl | rfl
+      · exact hu
+      · exact hv
+    have hAB := distinct_multiset_products_mod_l (by omega) hN (by omega) hTop hRepr
+      A B hA hB (by simp [A,B]) (by simpa [A] using (show 2 < l by omega))
+      (by intro p hp; simp only [A,B,Multiset.map_cons,Multiset.prod_cons,
+        Multiset.map_singleton,Multiset.prod_singleton]; rw [heq])
+    have hiB : i ∈ B := hAB ▸ (Multiset.mem_cons_self _ _ : i ∈ A)
+    have hSum := congrArg Multiset.sum hAB
+    simp [A,B] at hSum
+    have hiUV : i = u ∨ i = v := by simpa [B] using hiB
+    omega
+  have hPairsBlock (i j u v : ℕ) (hi : i ∈ S) (hj : j ∈ S) (hu : u ∈ S) (hv : v ∈ S)
+      (heq : b i*b j = b u*b v) :
+      (i=u ∧ j=v) ∨ (i=v ∧ j=u) := by
+    have hI := (mem_Ioc.mp (hS hi)).1
+    have hJ := (mem_Ioc.mp (hS hj)).1
+    have hU := (mem_Ioc.mp (hS hu)).1
+    have hV := (mem_Ioc.mp (hS hv)).1
+    have h := hPairs (hIndex i (hS hi)) (hIndex j (hS hj))
+      (hIndex u (hS hu)) (hIndex v (hS hv)) heq
+    omega
+  have hInj : Set.InjOn b ↑S := by
+    intro i hi j hj heq
+    have h := hPairsBlock i i j j hi hi hj hj (congrArg (fun d : ℕ => d*d) heq)
+    omega
+  have hZero : 0 ∉ S.image b := by
+    intro h
+    obtain ⟨i,hi,he⟩ := mem_image.mp h
+    exact ha (i-n) (hIndex i (hS hi)) he
+  have hCountImage : k - ((range k).filter Nat.Prime).card ≤ (S.image b).card := by
+    rw [Finset.card_image_of_injOn hInj]
+    exact hCount
+  have hSidon : ∀ a ∈ S.image b, ∀ b' ∈ S.image b, ∀ c ∈ S.image b, ∀ d ∈ S.image b,
+      a*b' = c*d → (a=c ∧ b'=d) ∨ (a=d ∧ b'=c) := by
+    intro a ha' b' hb c hc d hd heq
+    obtain ⟨i,hi,rfl⟩ := mem_image.mp ha'
+    obtain ⟨j,hj,rfl⟩ := mem_image.mp hb
+    obtain ⟨u,hu,rfl⟩ := mem_image.mp hc
+    obtain ⟨v,hv,rfl⟩ := mem_image.mp hd
+    rcases hPairsBlock i j u v hi hj hu hv heq with ⟨rfl,rfl⟩ | ⟨rfl,rfl⟩
+    · exact Or.inl ⟨rfl,rfl⟩
+    · exact Or.inr ⟨rfl,rfl⟩
+  have hLarge := hLower (S.image b) hZero hCountImage hSidon
+  rw [Finset.prod_image hInj] at hLarge
+  exact (not_lt_of_ge (Nat.le_of_dvd (Nat.factorial_pos _) hProduct)) hLarge
+
 end Erdos137PerfectPower
 
 namespace Erdos137PerfectPower
@@ -1153,10 +1259,6 @@ theorem good_smooth_coefficients {n k l : ℕ} {a x : ℕ → ℕ} (cutoff : ℕ
       exact hd.trans (dvd_mul_right _ _)
     exact (mem_sdiff.mp hi).2 (mem_biUnion.mpr ⟨p,hBad,mem_filter.mpr ⟨hiR,hPN⟩⟩)
 
-def smallOddCutoff (k : ℕ) : ℕ :=
-  if k < 10 then 3 else if k < 28 then 5 else if k < 77 then 7
-  else if k < 143 then 11 else if k < 340 then 13 else if k < 646 then 17 else 19
-
 private def smallPrimeList : List ℕ := [
   2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43,
   47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107,
@@ -1209,28 +1311,67 @@ private lemma fast_high_eq {k c : ℕ} (hk : k ≤ 1000) : fastHigh k c = highPr
   · rintro ⟨hpK, hp, hc⟩
     exact ⟨⟨by omega, hp⟩, hpK, hc⟩
 
+private structure OddBand where
+  lower : ℕ
+  upper : ℕ
+  cutoff : ℕ
+  deriving DecidableEq
+
+private def smallOddBands : List OddBand := [
+  ⟨4, 5, 3⟩, ⟨6, 7, 5⟩, ⟨8, 11, 5⟩, ⟨12, 14, 5⟩, ⟨15, 19, 5⟩,
+  ⟨20, 23, 7⟩, ⟨24, 31, 7⟩, ⟨32, 41, 7⟩, ⟨42, 53, 7⟩, ⟨54, 67, 11⟩,
+  ⟨68, 83, 11⟩, ⟨84, 102, 11⟩, ⟨103, 123, 11⟩, ⟨124, 149, 13⟩,
+  ⟨150, 179, 13⟩, ⟨180, 212, 13⟩, ⟨213, 249, 13⟩, ⟨250, 289, 13⟩,
+  ⟨290, 332, 17⟩, ⟨333, 381, 17⟩, ⟨382, 434, 17⟩, ⟨435, 491, 17⟩,
+  ⟨492, 553, 17⟩, ⟨554, 617, 17⟩, ⟨618, 683, 19⟩, ⟨684, 757, 19⟩,
+  ⟨758, 834, 19⟩, ⟨835, 916, 19⟩, ⟨917, 1000, 19⟩
+]
+
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-private lemma fast_small_odd_certificates : ∀ r : Fin 997,
-    let k := r.val+4
-    let c := smallOddCutoff k
-    let f := k - ∑ p ∈ fastHigh k c, (k+p-1)/p
-    let m := (fastLow k c).card
-    3^m < f*(f-1) ∧ 0 < f ∧ 5^m < (f+3).choose 4 ∧ 5*6^m ≤ (f+4)*5^m := by
+private lemma fast_small_odd_certificates : ∀ band ∈ smallOddBands,
+    let f := band.lower - ∑ p ∈ fastHigh band.upper band.cutoff, (band.upper+p-1)/p
+    let m := (fastLow band.upper band.cutoff).card
+    band.upper ≤ 1000 ∧ 3^m < f*(f-1) ∧ 0 < f ∧
+      5^m < (f+3).choose 4 ∧ 5*6^m ≤ (f+4)*5^m := by
   decide
 
-lemma small_odd_certificates : ∀ r : Fin 997,
-    let k := r.val+4
-    let c := smallOddCutoff k
-    let f := smoothLowerBound k c
-    let m := (lowPrimes k c).card
-    3^m < f*(f-1) ∧ 0 < f ∧ 5^m < (f+3).choose 4 ∧ 5*6^m ≤ (f+4)*5^m := by
-  intro r
-  have hk : r.val+4 ≤ 1000 := by omega
-  have h := fast_small_odd_certificates r
-  dsimp only at h ⊢
-  rw [fast_high_eq hk, fast_low_eq hk] at h
-  exact h
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+private lemma small_odd_band_cover : ∀ r : Fin 997, ∃ band ∈ smallOddBands,
+    band.lower ≤ r.val+4 ∧ r.val+4 ≤ band.upper := by
+  decide
+
+private lemma small_odd_certificate {k : ℕ} (hk : 4 ≤ k) (hkUpper : k ≤ 1000) :
+    ∃ c f m : ℕ, f ≤ smoothLowerBound k c ∧ (lowPrimes k c).card ≤ m ∧
+      3^m < f*(f-1) ∧ 0 < f ∧ 5^m < (f+3).choose 4 ∧ 5*6^m ≤ (f+4)*5^m := by
+  obtain ⟨band, hBand, hLo, hHi⟩ := small_odd_band_cover ⟨k-4, by omega⟩
+  change band.lower ≤ k-4+4 at hLo
+  change k-4+4 ≤ band.upper at hHi
+  have h : k-4+4 = k := by omega
+  rw [h] at hLo hHi
+  have hCert := fast_small_odd_certificates band hBand
+  dsimp only at hCert
+  rcases hCert with ⟨hUpper, hCert⟩
+  rw [fast_high_eq hUpper, fast_low_eq hUpper] at hCert
+  let m := (lowPrimes band.upper band.cutoff).card
+  let f := band.lower - ∑ p ∈ highPrimes band.upper band.cutoff, (band.upper+p-1)/p
+  have hLow : lowPrimes k band.cutoff ⊆ lowPrimes band.upper band.cutoff := by
+    intro p hp
+    rcases mem_filter.mp hp with ⟨hpK,hp⟩
+    exact mem_filter.mpr ⟨mem_range.mpr ((mem_range.mp hpK).trans_le hHi), hp⟩
+  have hHigh : highPrimes k band.cutoff ⊆ highPrimes band.upper band.cutoff := by
+    intro p hp
+    rcases mem_filter.mp hp with ⟨hpK,hp⟩
+    exact mem_filter.mpr ⟨mem_range.mpr ((mem_range.mp hpK).trans_le hHi), hp⟩
+  have hLoss : (∑ p ∈ highPrimes k band.cutoff, (k+p-1)/p) ≤
+      ∑ p ∈ highPrimes band.upper band.cutoff, (band.upper+p-1)/p := by
+    calc
+      _ ≤ ∑ p ∈ highPrimes k band.cutoff, (band.upper+p-1)/p :=
+        Finset.sum_le_sum (fun p _ => Nat.div_le_div_right (by omega))
+      _ ≤ _ := Finset.sum_le_sum_of_subset_of_nonneg hHigh (fun _ _ _ => Nat.zero_le _)
+  refine ⟨band.cutoff, f, m, ?_, card_le_card hLow, hCert⟩
+  exact Nat.sub_le_sub hLo hLoss
 
 theorem small_cubic_of_sylvester {n k : ℕ} (hk : 4 ≤ k) (hkUpper : k ≤ 1000)
     (hSylvester : ∃ p : ℕ, p.Prime ∧ k < p ∧ p ∣ ∏ t ∈ Ioc n (n+k), t) :
@@ -1238,14 +1379,14 @@ theorem small_cubic_of_sylvester {n k : ℕ} (hk : 4 ≤ k) (hkUpper : k ≤ 100
   by_contra! hAll
   obtain ⟨hN,hTop⟩ := sylvester_schur_power_bounds_of_no_witness (by decide) hSylvester hAll
   obtain ⟨a,x,ha,hRepr,hSupport,_⟩ := normalize_odd_coefficients (by decide) hAll
-  obtain ⟨S,hS,hCount,hPrime⟩ := good_smooth_coefficients (smallOddCutoff k) hRepr hSupport
-  have hBound := ratio_residue_bound S (lowPrimes k (smallOddCutoff k))
+  obtain ⟨c, f, m, hF, hM, hNumeric, _⟩ := small_odd_certificate hk hkUpper
+  obtain ⟨S,hS,hCount,hPrime⟩ := good_smooth_coefficients c hRepr hSupport
+  have hBound := ratio_residue_bound S (lowPrimes k c)
     (by omega) hN (by decide) hTop hRepr hS (fun i hi => ha i (hS hi)) hPrime
-  have hNumeric := (small_odd_certificates ⟨k-4, by omega⟩).1
-  dsimp only at hNumeric
-  rw [show k-4+4 = k by omega] at hNumeric
-  have hCountProduct := Nat.mul_le_mul hCount (Nat.sub_le_sub_right hCount 1)
-  exact (not_lt_of_ge (hCountProduct.trans hBound)) hNumeric
+  have hF' := hF.trans hCount
+  have hCountProduct := Nat.mul_le_mul hF' (Nat.sub_le_sub_right hF' 1)
+  exact (not_lt_of_ge (hCountProduct.trans (hBound.trans
+    (pow_le_pow_right' (by decide : (1:ℕ) ≤ 3) hM)))) hNumeric
 
 theorem small_higher_exponent_of_sylvester {n k l : ℕ}
     (hk : 4 ≤ k) (hkUpper : k ≤ 1000) (hl : 5 ≤ l)
@@ -1254,16 +1395,16 @@ theorem small_higher_exponent_of_sylvester {n k l : ℕ}
   by_contra! hAll
   obtain ⟨hN,hTop⟩ := sylvester_schur_power_bounds_of_no_witness (by omega) hSylvester hAll
   obtain ⟨a,x,ha,hRepr,hSupport,_⟩ := normalize_odd_coefficients (by omega) hAll
-  obtain ⟨S,hS,hCount,hPrime⟩ := good_smooth_coefficients (smallOddCutoff k) hRepr hSupport
-  have hBound := smooth_multiset_residue_bound S (lowPrimes k (smallOddCutoff k))
+  obtain ⟨c, f, m, hF, hM, _, hPos, hBase, hStep⟩ := small_odd_certificate hk hkUpper
+  obtain ⟨S,hS,hCount,hPrime⟩ := good_smooth_coefficients c hRepr hSupport
+  have hBound := smooth_multiset_residue_bound S (lowPrimes k c)
     (by omega) hN (by omega) hTop (d := l-1) (by omega) hRepr hS (fun i hi => ha i (hS hi)) hPrime
-  have hNumeric := (small_odd_certificates ⟨k-4, by omega⟩).2
-  dsimp only at hNumeric
-  rw [show k-4+4 = k by omega] at hNumeric
-  have hStrict := smooth_multiset_numeric_induction hl hNumeric.1 hNumeric.2.1 hNumeric.2.2
+  have hStrict := smooth_multiset_numeric_induction hl hPos hBase hStep
+  have hF' := hF.trans hCount
   have hMono := Nat.choose_le_choose (l-1)
-    (show smoothLowerBound k (smallOddCutoff k)+l-2 ≤ S.card+(l-1)-1 by omega)
-  exact (not_lt_of_ge (hMono.trans hBound)) hStrict
+    (show f+l-2 ≤ S.card+(l-1)-1 by omega)
+  exact (not_lt_of_ge (hMono.trans (hBound.trans
+    (pow_le_pow_right' (by omega : 1 ≤ l) hM)))) hStrict
 
 theorem small_odd_prime_of_sylvester {n k l : ℕ} (hk : 3 ≤ k) (hkUpper : k ≤ 1000)
     (hPrime : l.Prime) (hl : 3 ≤ l)
