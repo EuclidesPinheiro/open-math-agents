@@ -61,19 +61,20 @@ jobs:
           cd formal-conjectures
           case "$PART" in
             bridge)
-              awk '/^private def dyadicRankThresholds/ { exit } { print }' ../verification/H3_odd_bridge.lean > H3LeanAudit.lean
-              printf '\nend Erdos137OddBridge\n' >> H3LeanAudit.lean
+              cp ../verification/H3_odd_bridge.lean H3LeanAudit.lean
+              printf '\n#print axioms Erdos137OddBridge.bridge_rank_product\n#print axioms Erdos137OddBridge.analytic_rank_product\n' >> H3LeanAudit.lean
               ;;
             tail)
               cp ../verification/H3_odd_tail.lean H3LeanAudit.lean
+              printf '\n#print axioms Erdos137OddTail.dyadic_prime_bound_valid\n#print axioms Erdos137OddTail.tail_from_prime_estimates\n' >> H3LeanAudit.lean
               ;;
             primorial)
-              awk '/^private lemma factorial_ratio_at_5000/ { exit } { print }' ../verification/H3_odd_primorial.lean | head -n -2 > H3LeanAudit.lean
-              printf '\nend Erdos137OddPrimorial\n' >> H3LeanAudit.lean
+              cp ../verification/H3_odd_primorial.lean H3LeanAudit.lean
+              printf '\n#print axioms Erdos137OddPrimorial.primorial_eighth_le\n' >> H3LeanAudit.lean
               ;;
             medium)
-              awk '/^private def mediumPrimeList/ { exit } { print }' ../verification/H3_odd_prime.lean > H3LeanAudit.lean
-              printf '\nend Erdos137PerfectPower\n' >> H3LeanAudit.lean
+              cp ../verification/H3_odd_prime.lean H3LeanAudit.lean
+              printf '\n#print axioms Erdos137PerfectPower.medium_odd_prime_of_sylvester\n#print axioms Erdos137PerfectPower.odd_branch_from_rank_certificate\n' >> H3LeanAudit.lean
               ;;
           esac
-          timeout -k 5 260 stdbuf -oL -eL lake env lean H3LeanAudit.lean
+          timeout -k 5 960 stdbuf -oL -eL lake env lean -Dprofiler=true H3LeanAudit.lean
