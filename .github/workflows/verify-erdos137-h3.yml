@@ -6,13 +6,6 @@ permissions:
   contents: read
 jobs:
   lean:
-    name: Lean ${{ matrix.part }}
-    strategy:
-      fail-fast: false
-      matrix:
-        part: [primorial]
-    env:
-      PART: ${{ matrix.part }}
     runs-on: ubuntu-latest
     timeout-minutes: 55
     steps:
@@ -54,27 +47,16 @@ jobs:
           path: |
             ~/.elan
             formal-conjectures/.lake
-      - name: Compile the odd exponent lemmas
-        id: odd
+      - name: Check the exact OMA odd-prime submission
+        if: ${{ success() || steps.odd.outcome == 'failure' }}
         shell: bash
         run: |
-          cd formal-conjectures
-          case "$PART" in
-            bridge)
-              cp ../verification/H3_odd_bridge.lean H3LeanAudit.lean
-              printf '\n#print axioms Erdos137OddBridge.bridge_rank_product\n#print axioms Erdos137OddBridge.analytic_rank_product\n' >> H3LeanAudit.lean
-              ;;
-            tail)
-              cp ../verification/H3_odd_tail.lean H3LeanAudit.lean
-              printf '\n#print axioms Erdos137OddTail.dyadic_prime_bound_valid\n#print axioms Erdos137OddTail.tail_from_prime_estimates\n' >> H3LeanAudit.lean
-              ;;
-            primorial)
-              cp ../verification/H3_odd_primorial.lean H3LeanAudit.lean
-              printf '\n#print axioms Erdos137OddPrimorial.primorial_eighth_le\n' >> H3LeanAudit.lean
-              ;;
-            medium)
-              cp ../verification/H3_odd_prime.lean H3LeanAudit.lean
-              printf '\n#print axioms Erdos137PerfectPower.medium_odd_prime_of_sylvester\n#print axioms Erdos137PerfectPower.odd_branch_from_rank_certificate\n' >> H3LeanAudit.lean
-              ;;
-          esac
-          timeout -k 5 960 stdbuf -oL -eL lake env lean -Dprofiler=true H3LeanAudit.lean
+          set -euo pipefail
+          export OMA_FC="$PWD/formal-conjectures"
+          for reduction in verification/Erdos137*.R1.lean; do cp "$reduction" reductions/; done
+          proof=proofs/Erdos137.erdos_137.variants.perfect_power.R1.H3.R1.H2.lean
+          cp verification/H3_odd_submission.lean "$proof"
+          rc=0
+          bash tools/check.sh "$proof" "${RUNNER_TEMP}/erdos137-verdict.json" || rc=$?
+          python3 -m json.tool "${RUNNER_TEMP}/erdos137-verdict.json"
+          exit "$rc"
