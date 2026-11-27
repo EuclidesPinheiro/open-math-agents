@@ -919,7 +919,7 @@ theorem greedy_small_factor (B L t : ℕ) (hB : 1 ≤ B) (ht : 0 < t) :
             · simpa only [mem_singleton.mp h] using hpL
           have hNextSorted (q : ℕ) (hq : q ∈ (v*p).primeFactors) (hw1 : w ≠ 1) :
               q ≤ w.minFac := by
-            have hLe : p ≤ w.minFac := Nat.minFac_le_of_dvd (Nat.minFac_prime hw1).ne_one
+            have hLe : p ≤ w.minFac := Nat.minFac_le_of_dvd (Nat.minFac_prime hw1).two_le
               ((Nat.minFac_dvd w).trans hDvd)
             rw [Nat.primeFactors_mul hv.ne' hp.ne_zero, hp.primeFactors] at hq
             rcases mem_union.mp hq with h | h
@@ -1056,8 +1056,8 @@ private lemma left_factor_count (row : FactorCoverRow) (x : ℕ) (hRow : rowVali
   have hDiv : ((x/d : ℕ) : ℚ) ≤ (x : ℚ)/d := by
     apply (le_div_iff₀ (by exact_mod_cast hd : (0:ℚ)<d)).2
     exact_mod_cast Nat.div_mul_le_self x d
-  have hBound := hAffQ.trans (add_le_add_right
-    (mul_le_mul_of_nonneg_left hDiv (by positivity : 0 ≤ (row.phi : ℚ))) _)
+  have hBound := hAffQ.trans (add_le_add
+    (mul_le_mul_of_nonneg_left hDiv (by positivity : 0 ≤ (row.phi : ℚ))) (le_refl (row.error : ℚ)))
   have ht : (row.phi : ℚ)*((x : ℚ)/d) + row.error =
       (rowDensity row*(x : ℚ) + rowError row) * row.period := by
     have hperiod : (row.period : ℚ) ≠ 0 := by exact_mod_cast hq.ne'
@@ -1074,6 +1074,7 @@ private lemma left_factor_count (row : FactorCoverRow) (x : ℕ) (hRow : rowVali
     simpa only [mul_comm (row.period : ℚ)] using hBound
   exact le_of_mul_le_mul_right hScaled hPos
 
+set_option maxHeartbeats 0 in
 private lemma graph_density_from_rows (rows : Finset FactorCoverRow)
     (B L x A C E : ℕ) (S : Finset ℕ) (hB : 1 ≤ B) (hC : 0 < C)
     (hS : ∀ t ∈ S, 0 < t ∧ t ≤ x)
@@ -1108,7 +1109,7 @@ private lemma graph_density_from_rows (rows : Finset FactorCoverRow)
         apply Nat.coprime_of_dvd
         intro p hp hd huD
         have hP := hbFactors p (Nat.mem_primeFactors.mpr ⟨hp,hd,(hRows base hbRows).2.2.1.ne'⟩)
-        have hMin := Nat.minFac_le_of_dvd hp.ne_one huD
+        have hMin := Nat.minFac_le_of_dvd hp.two_le huD
         omega
       exact mem_biUnion.mpr ⟨base,hbRows,left_factor_mem (hRows base hbRows) hu
         (by omega) hSize (by simp [hbP]) hCop⟩
@@ -1125,7 +1126,7 @@ private lemma graph_density_from_rows (rows : Finset FactorCoverRow)
             apply Nat.coprime_of_dvd
             intro r hr hd huD
             have hP := hbFactors r (Nat.mem_primeFactors.mpr ⟨hr,hd,(hRows base hbRows).2.2.1.ne'⟩)
-            have hMin : p ≤ r := Nat.minFac_le_of_dvd hr.ne_one huD
+            have hMin : p ≤ r := Nat.minFac_le_of_dvd hr.two_le huD
             omega
           exact mem_biUnion.mpr ⟨base,hbRows,left_factor_mem (hRows base hbRows) hu
             (by omega) hSize (by simp [hbP]) hCop⟩
@@ -1137,7 +1138,7 @@ private lemma graph_density_from_rows (rows : Finset FactorCoverRow)
             apply Nat.coprime_of_dvd
             intro r hr hd hrU
             have hP := hrFactors r (Nat.mem_primeFactors.mpr ⟨hr,hd,(hRows row hrRows).2.2.1.ne'⟩)
-            have hMin : p ≤ r := Nat.minFac_le_of_dvd hr.ne_one (hrU.trans (Nat.div_dvd_of_dvd hPDvd))
+            have hMin : p ≤ r := Nat.minFac_le_of_dvd hr.two_le (hrU.trans (Nat.div_dvd_of_dvd hPDvd))
             omega
           exact mem_biUnion.mpr ⟨row,hrRows,left_factor_mem (hRows row hrRows) hu
             (hrMin v hvV hOver hSorted) hSize hPDvd hCop⟩
@@ -1149,7 +1150,7 @@ private lemma graph_density_from_rows (rows : Finset FactorCoverRow)
       _ ≤ (U.card : ℚ)+V.card.choose 2 := by exact_mod_cast hGraph
       _ ≤ (∑ row ∈ rows, ((leftFactorsForRow row x).card : ℚ)) + V.card.choose 2 := by
         exact_mod_cast Nat.add_le_add_right hCards (V.card.choose 2)
-      _ ≤ (∑ row ∈ rows, rowDensity row*x+rowError row)+V.card.choose 2 :=
+      _ ≤ (∑ row ∈ rows, (rowDensity row*x+rowError row))+V.card.choose 2 :=
         add_le_add_right (sum_le_sum (fun row hrow => left_factor_count row x (hRows row hrow))) _
       _ = _ := by rw [Finset.sum_add_distrib, Finset.sum_mul]; ac_rfl
   have hAll := hCombined.trans (add_le_add
