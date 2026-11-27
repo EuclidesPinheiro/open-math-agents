@@ -107,9 +107,9 @@ lemma filter_sum_one (S : Finset ℕ) (f : ℕ → Prop) [DecidablePred f] :
   rw [← sum_filter]
   simp
 
-lemma height_sum_bound (k : ℕ) :
+lemma height_sum_bound_split (k : ℕ) :
     (∑ p ∈ (k-1).primesLE, dyadicHeight k p) ≤
-      ∑ i ∈ range (k.log2+1), (k/2^i).primesLE.card := by
+      (k-1).primesLE.card + ∑ i ∈ range k.log2, (k/2^(i+1)).primesLE.card := by
   let P := (k-1).primesLE
   let J := range (k.log2+1)
   have hHeight (p : ℕ) (hp : p ∈ P) : dyadicHeight k p =
@@ -127,18 +127,81 @@ lemma height_sum_bound (k : ℕ) :
       sum_congr rfl hHeight
     _ = ∑ i ∈ J, ∑ p ∈ P, if i < dyadicHeight k p then 1 else 0 := sum_comm
     _ ≤ _ := by
-      apply sum_le_sum
-      intro i _
-      rw [filter_sum_one]
-      apply card_le_card
-      intro p hp
-      have hp' := (mem_filter.mp (mem_filter.mp hp).1).2
-      have hi := (mem_filter.mp hp).2
-      have hPow : 2^i*p < k := by
-        by_contra! h
-        exact (not_le_of_gt hi) (dyadic_height_le k p i hp'.pos h)
-      have hDiv : p ≤ k/2^i := (Nat.le_div_iff_mul_le (by positivity)).2 (by simpa [mul_comm] using hPow.le)
-      exact mem_filter.mpr ⟨mem_range.mpr (by omega), hp'⟩
+      dsimp [J]
+      rw [sum_range_succ']
+      rw [Nat.add_comm P.card]
+      apply add_le_add
+      · apply sum_le_sum
+        intro i _
+        rw [filter_sum_one]
+        apply card_le_card
+        intro p hp
+        have hp' := (mem_filter.mp (mem_filter.mp hp).1).2
+        have hi := (mem_filter.mp hp).2
+        have hPow : 2^(i+1)*p < k := by
+          by_contra! h
+          exact (not_le_of_gt hi) (dyadic_height_le k p (i+1) hp'.pos h)
+        have hDiv : p ≤ k/2^(i+1) :=
+          (Nat.le_div_iff_mul_le (by positivity)).2 (by simpa only [mul_comm] using hPow.le)
+        exact mem_filter.mpr ⟨mem_range.mpr (by omega), hp'⟩
+      · rw [filter_sum_one]
+        exact card_filter_le (s := P) _
+
+lemma height_sum_bound (k : ℕ) :
+    (∑ p ∈ (k-1).primesLE, dyadicHeight k p) ≤
+      ∑ i ∈ range (k.log2+1), (k/2^i).primesLE.card := by
+  apply (height_sum_bound_split k).trans
+  rw [sum_range_succ', pow_zero, Nat.div_one]
+  have h := card_le_card (Nat.primesLE_mono (Nat.sub_le k 1))
+  omega
+
+lemma pow_prime_card_le_mul_primorial (k : ℕ) : k^((k-1).primesLE.card) ≤
+    2^(∑ p ∈ (k-1).primesLE, dyadicHeight k p)*primorial (k-1) := by
+  rw [primorial_eq_prod_primesLE, ← Finset.prod_pow_eq_pow_sum, ← Finset.prod_mul_distrib]
+  calc
+    _ = ∏ _ ∈ (k-1).primesLE, k := (prod_const _).symm
+    _ ≤ _ := prod_le_prod' fun p hp => le_dyadic_height k p (Nat.mem_primesLE.mp hp).2.pos
+
+def dyadicPrimeBound (n : ℕ) (countUpper : ℕ → ℕ) : ℕ :=
+  (104*(n-1) + 64*(∑ j ∈ range n.log2, countUpper (n/2^(j+1)))) / ((n^64).log2-64)
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 1000000 in
+lemma dyadic_prime_bound_valid {n : ℕ} (hn : 3 ≤ n) (countUpper : ℕ → ℕ)
+    (hCount : ∀ m, m.primesLE.card ≤ countUpper m)
+    (hPrimorial : ∀ m : ℕ, (primorial m)^8 ≤ 2^(13*m)) :
+    (n-1).primesLE.card ≤ dyadicPrimeBound n countUpper := by
+  let P := (n-1).primesLE.card
+  let w := ∑ p ∈ (n-1).primesLE, dyadicHeight n p
+  let b := ∑ j ∈ range n.log2, countUpper (n/2^(j+1))
+  let f := (n^64).log2
+  have hW : w ≤ P+b := (height_sum_bound_split n).trans
+    (Nat.add_le_add_left (sum_le_sum (fun j _ => hCount _)) _)
+  have hBound : (n^P)^8 ≤ 2^(8*w+13*(n-1)) := by
+    calc
+      _ ≤ (2^w*primorial (n-1))^8 := pow_le_pow_left' (pow_prime_card_le_mul_primorial n) _
+      _ = 2^(w*8)*(primorial (n-1))^8 := by rw [mul_pow, ← pow_mul]
+      _ ≤ 2^(w*8)*2^(13*(n-1)) := Nat.mul_le_mul_left _ (hPrimorial _)
+      _ = _ := by rw [pow_add, Nat.mul_comm 8]
+  have hLower : 2^f ≤ n^64 := Nat.log2_self_le (by positivity)
+  have hPow : 2^(f*P) ≤ 2^(64*w+104*(n-1)) := by
+    calc
+      _ = (2^f)^P := pow_mul _ _ _
+      _ ≤ (n^64)^P := pow_le_pow_left' hLower _
+      _ = ((n^P)^8)^8 := by simp only [← pow_mul]; congr 1; omega
+      _ ≤ (2^(8*w+13*(n-1)))^8 := pow_le_pow_left' hBound _
+      _ = _ := by rw [← pow_mul]; congr 1; omega
+  have hExp : f*P ≤ 64*w+104*(n-1) := by
+    by_contra! h
+    exact (not_lt_of_ge hPow) (Nat.pow_lt_pow_right (by decide) h)
+  have hF : 64 < f := by
+    apply (Nat.le_log2 (by positivity : n^64 ≠ 0)).2
+    exact (show (2:ℕ)^65 ≤ 3^64 by decide).trans (pow_le_pow_left' hn _)
+  have hLin : (f-64)*P ≤ 104*(n-1) + 64*b := by
+    have hEq : f*P = (f-64)*P+64*P := by
+      conv_lhs => rw [show f = (f-64)+64 by omega,Nat.add_mul]
+    omega
+  exact (Nat.le_div_iff_mul_le (by omega : 0 < f-64)).2 (by simpa only [Nat.mul_comm (f-64)] using hLin)
 
 lemma sum_dyadic_div_le (k e : ℕ) : (∑ j ∈ range e, k/2^j) ≤ 2*k := by
   induction e generalizing k with
@@ -165,7 +228,7 @@ lemma dyadic_exponential_absorption (C : ℕ) (hC : C*22 ≤ 2^21) (e : ℕ) (he
     exact hStep.trans (by simpa only [mul_comm] using Nat.mul_le_mul_left 2 ih)
 
 lemma dyadic_budget_arithmetic {k P e w : ℕ} (hk : 2097152 ≤ k)
-    (hw : 128*w ≤ 26*k+837376*(e+1)) (hA : 91588*(e+1) ≤ k)
+    (hw : 128*w ≤ 26*k+857600*(e+1)) (hA : 93800*(e+1) ≤ k)
     (hB : 89520*(e+1) ≤ k) (hP : 168*P ≤ 8*w+13*k) :
     120*(P+1492) ≤ 11*k ∧ 12*(8*w+13*k+11936*(e+1)) ≤ 184*k := by
   have hw' : 448*w ≤ 123*k := by omega
@@ -176,7 +239,7 @@ set_option maxRecDepth 10000 in
 set_option maxHeartbeats 1000000 in
 lemma tail_from_prime_estimates (k : ℕ) (hk : 2^21 ≤ k)
     (hPrimorial : ∀ n : ℕ, (primorial n)^8 ≤ 2^(13*n))
-    (hPrimeCount : ∀ n : ℕ, 128*n.primesLE.card ≤ 13*n+128*6542) :
+    (hPrimeCount : ∀ n : ℕ, 128*n.primesLE.card ≤ 13*n+128*6700) :
     (k-1).factorial < ∏ i ∈ range (retainedCount k), rankBound (i+1) := by
   let P := ((range k).filter Nat.Prime).card
   let e := k.log2
@@ -189,18 +252,20 @@ lemma tail_from_prime_estimates (k : ℕ) (hk : 2^21 ≤ k)
     simpa only [P,card_range] using card_filter_le (s := range k) Nat.Prime
   have hBounds := (Nat.log2_eq_iff hK.ne').mp (show k.log2 = e from rfl)
   have he : 21 ≤ e := (Nat.le_log2 hK.ne').2 hk
-  have hAbsorb : 14*6542*(e+1) ≤ k := (dyadic_exponential_absorption (14*6542) (by decide) e he).trans hBounds.1
+  have hAbsorb : 14*6700*(e+1) ≤ k := (dyadic_exponential_absorption (14*6700) (by decide) e he).trans hBounds.1
   have hOffset : 60*1492*(e+1) ≤ k := (dyadic_exponential_absorption (60*1492) (by decide) e he).trans hBounds.1
-  have hW : 128*w ≤ 26*k+128*6542*(e+1) := by
+  have hW : 128*w ≤ 26*k+128*6700*(e+1) := by
     calc
       _ ≤ 128*(∑ j ∈ range (e+1), (k/2^j).primesLE.card) :=
         Nat.mul_le_mul_left 128 (height_sum_bound k)
       _ = ∑ j ∈ range (e+1), 128*(k/2^j).primesLE.card := by rw [mul_sum]
-      _ ≤ ∑ j ∈ range (e+1), (13*(k/2^j)+128*6542) := sum_le_sum (fun j _ => hPrimeCount _)
-      _ = 13*(∑ j ∈ range (e+1), k/2^j)+128*6542*(e+1) := by
+      _ ≤ ∑ j ∈ range (e+1), (13*(k/2^j)+128*6700) := sum_le_sum (fun j _ => hPrimeCount _)
+      _ = 13*(∑ j ∈ range (e+1), k/2^j)+128*6700*(e+1) := by
         simp only [sum_add_distrib, ← mul_sum, sum_const, card_range, nsmul_eq_mul, Nat.cast_id]
         rw [Nat.mul_comm (e+1)]
-      _ ≤ _ := Nat.add_le_add_right (Nat.mul_le_mul_left 13 (sum_dyadic_div_le k (e+1))) _
+      _ ≤ _ := by
+        simpa only [← Nat.mul_assoc] using Nat.add_le_add_right
+          (Nat.mul_le_mul_left 13 (sum_dyadic_div_le k (e+1))) (128*6700*(e+1))
   have hKProd : k^P ≤ 2^w*primorial (k-1) := by
     rw [primorial_eq_prod_primesLE, show 2^w = ∏ p ∈ (k-1).primesLE, 2^(dyadicHeight k p) by
       exact (Finset.prod_pow_eq_pow_sum _ _ _).symm, ← Finset.prod_mul_distrib]

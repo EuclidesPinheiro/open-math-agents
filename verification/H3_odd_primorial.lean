@@ -276,12 +276,81 @@ lemma factorial_ratio_growth {n : ℕ} (hn : 5000 ≤ n) :
       Nat.mul_le_mul_right _ (run_ratio hn)
     _ = _ := by ac_rfl
 
+private lemma factorial_run_lower (n r : ℕ) : (n+1)^r ≤ factorialRun n r := by
+  unfold factorialRun
+  rw [Finset.pow_eq_prod_const]
+  exact Finset.prod_le_prod' (fun i _ => by omega)
+
+private def baseTop (r : ℕ) : ℕ := 5029^r*167^((5000+r)/30-166)
+
+private def baseBottom (r : ℕ) : ℕ :=
+  2501^((5000+r)/2-2500)*1667^((5000+r)/3-1666)*1001^((5000+r)/5-1000)
+
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-lemma factorial_ratio_base : ∀ r : Fin 30,
+private lemma factorial_ratio_at_5000 :
+    factorialNumerator 5000*100^5000*100000000 ≤ factorialDenominator 5000*253^5000 := by
+  decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 1500000 in
+private lemma base_numerator_upper (r : ℕ) (hr : r < 30) :
+    factorialNumerator (5000+r) ≤ factorialNumerator 5000 * baseTop r := by
+  let d := (5000+r)/30-166
+  have hd : (5000+r)/30 = 166+d := by dsimp [d]; omega
+  have hd' : 166+d ≤ 167 := by omega
+  have h1 := (factorial_run_upper 5000 r).trans
+    (pow_le_pow_left' (by omega : 5000+r ≤ 5029) r)
+  have h2 := (factorial_run_upper 166 d).trans (pow_le_pow_left' hd' d)
+  unfold factorialNumerator baseTop
+  change (5000+r).factorial*((5000+r)/30).factorial ≤
+    (5000:ℕ).factorial * (166:ℕ).factorial * (5029^r * 167^d)
+  rw [hd, factorial_extend 5000 r, factorial_extend 166 d]
+  calc
+    _ = ((5000:ℕ).factorial*(166:ℕ).factorial)*(factorialRun 5000 r*factorialRun 166 d) := by ac_rfl
+    _ ≤ _ := Nat.mul_le_mul_left _ (Nat.mul_le_mul h1 h2)
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 1500000 in
+private lemma base_denominator_lower (r : ℕ) :
+    factorialDenominator 5000 * baseBottom r ≤ factorialDenominator (5000+r) := by
+  let d₂ := (5000+r)/2-2500
+  let d₃ := (5000+r)/3-1666
+  let d₅ := (5000+r)/5-1000
+  have h₂ : (5000+r)/2 = 2500+d₂ := by dsimp [d₂]; omega
+  have h₃ : (5000+r)/3 = 1666+d₃ := by dsimp [d₃]; omega
+  have h₅ : (5000+r)/5 = 1000+d₅ := by dsimp [d₅]; omega
+  unfold factorialDenominator baseBottom
+  change (((2500:ℕ).factorial*(1666:ℕ).factorial)*(1000:ℕ).factorial)*(2501^d₂*1667^d₃*1001^d₅) ≤
+    ((5000+r)/2).factorial*((5000+r)/3).factorial*((5000+r)/5).factorial
+  rw [h₂, h₃, h₅, factorial_extend 2500 d₂, factorial_extend 1666 d₃, factorial_extend 1000 d₅]
+  calc
+    _ ≤ (((2500:ℕ).factorial*(1666:ℕ).factorial)*(1000:ℕ).factorial)*(factorialRun 2500 d₂*factorialRun 1666 d₃*factorialRun 1000 d₅) :=
+      Nat.mul_le_mul_left _ (Nat.mul_le_mul (Nat.mul_le_mul (factorial_run_lower 2500 d₂)
+        (factorial_run_lower 1666 d₃)) (factorial_run_lower 1000 d₅))
+    _ = _ := by ac_rfl
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 1500000 in
+lemma factorial_ratio_base (r : Fin 30) :
     factorialNumerator (5000+r.val)*100^(5000+r.val) ≤
       factorialDenominator (5000+r.val)*253^(5000+r.val) := by
-  decide +kernel
+  have hTable : ∀ j : Fin 30, baseTop j.val*100^j.val ≤ baseBottom j.val*100000000*253^j.val := by
+    decide +kernel
+  have hA := base_numerator_upper r.val r.isLt
+  have hB := base_denominator_lower r.val
+  have hRow := hTable r
+  rw [pow_add 100,pow_add 253]
+  calc
+    _ ≤ (factorialNumerator 5000*baseTop r.val)*(100^5000*100^r.val) := Nat.mul_le_mul_right _ hA
+    _ = (factorialNumerator 5000*100^5000)*(baseTop r.val*100^r.val) := by ac_rfl
+    _ ≤ (factorialNumerator 5000*100^5000)*(baseBottom r.val*100000000*253^r.val) :=
+      Nat.mul_le_mul_left _ hRow
+    _ = (factorialNumerator 5000*100^5000*100000000)*(baseBottom r.val*253^r.val) := by ac_rfl
+    _ ≤ (factorialDenominator 5000*253^5000)*(baseBottom r.val*253^r.val) :=
+      Nat.mul_le_mul_right _ factorial_ratio_at_5000
+    _ = (factorialDenominator 5000*baseBottom r.val)*(253^5000*253^r.val) := by ac_rfl
+    _ ≤ _ := Nat.mul_le_mul_right _ hB
 
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 1500000 in
@@ -415,40 +484,41 @@ theorem primorial_eighth_le (n : ℕ) : (primorial n)^8 ≤ 2^(13*n) := by
       _ = _ := by rw [← pow_mul]
   exact_mod_cast h
 
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma prime_count_65536 : (Nat.primesLE 65536).card = 6542 := by decide
-
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 1500000 in
-lemma prime_count_linear (n : ℕ) :
-    128*n.primesLE.card ≤ 13*n+128*6542 := by
+lemma prime_count_linear_from_cutoff (n b C : ℕ) (hC : (Nat.primesLE (2^b)).card ≤ C) :
+    (8*b)*n.primesLE.card ≤ 13*n+(8*b)*C := by
   let P := n.primesLE
-  let S := P.filter (· ≤ 65536)
-  let T := P.filter (65536 < ·)
-  have hS : S ⊆ Nat.primesLE 65536 := by
+  let S := P.filter (· ≤ 2^b)
+  let T := P.filter (2^b < ·)
+  have hS : S ⊆ Nat.primesLE (2^b) := by
     intro p hp
     rcases mem_filter.mp hp with ⟨hpP,hpU⟩
     have hp' := (mem_filter.mp hpP).2
     exact mem_filter.mpr ⟨mem_range.mpr (by omega),hp'⟩
-  have hSmall := (card_le_card hS).trans_eq prime_count_65536
+  have hSmall := (card_le_card hS).trans hC
   have hCount : S.card+T.card = P.card := by
-    have h := card_filter_add_card_filter_not (s := P) (· ≤ (65536:ℕ))
+    have h := card_filter_add_card_filter_not (s := P) (· ≤ (2^b:ℕ))
     simpa only [S,T,not_le] using h
-  have hL : (2^16 : ℕ)^T.card ≤ primorial n := by
+  have hL : (2^b : ℕ)^T.card ≤ primorial n := by
     rw [primorial_eq_prod_primesLE]
     calc
-      _ = ∏ _ ∈ T, (2^16 : ℕ) := (Finset.prod_const _).symm
+      _ = ∏ _ ∈ T, (2^b : ℕ) := (Finset.prod_const _).symm
       _ ≤ ∏ p ∈ T, p := Finset.prod_le_prod' (fun p hp => by
         have h := (mem_filter.mp hp).2
         omega)
       _ ≤ ∏ p ∈ P, p := Finset.prod_le_prod_of_subset_of_one_le' (filter_subset ..)
         (fun p hp _ => (show p.Prime from (mem_filter.mp hp).2).pos)
   have hP := (pow_le_pow_left' hL 8).trans (primorial_eighth_le n)
-  rw [← pow_mul, ← pow_mul, show 16*T.card*8 = 128*T.card by omega] at hP
-  have hc : 128*T.card ≤ 13*n := by
+  simp only [← pow_mul] at hP
+  have hR : b*T.card*8 = (8*b)*T.card := by ac_rfl
+  rw [hR] at hP
+  have hc : (8*b)*T.card ≤ 13*n := by
     by_contra! hh
     exact (not_lt_of_ge hP) (Nat.pow_lt_pow_right (by decide) hh)
+  have hProd : (8*b)*S.card ≤ (8*b)*C := Nat.mul_le_mul_left _ hSmall
+  have hCount' := congrArg (fun t : ℕ => (8*b)*t) hCount
+  rw [Nat.mul_add] at hCount'
   omega
 
 end Erdos137OddPrimorial
