@@ -47,29 +47,16 @@ jobs:
           path: |
             ~/.elan
             formal-conjectures/.lake
-      - name: Compile the odd exponent lemmas
-        id: odd
+      - name: Check the exact OMA odd-prime submission
+        if: ${{ success() || steps.odd.outcome == 'failure' }}
         shell: bash
         run: |
-          cd formal-conjectures
-          awk '{ print } /^end Erdos137PerfectPower/ { exit }' ../verification/H3_odd_prime.lean > H3OddGraphAudit.lean
-          awk '/^private lemma dyadic_rank_intervals_valid/ { exit } { print }' ../verification/H3_odd_bridge.lean | head -n -2 > H3OddBridgeSmoke.lean
-          printf '\nend Erdos137OddBridge\n' >> H3OddBridgeSmoke.lean
-          set +e
-          timeout -k 5 360 lake env lean ../verification/H3_odd_prime.lean > /tmp/erdos137-graph.log 2>&1 &
-          graph_check=$!
-          timeout -k 5 360 lake env lean -Dprofiler=true ../verification/H3_odd_primorial.lean > /tmp/erdos137-primorial.log 2>&1 &
-          primorial_check=$!
-          timeout -k 5 360 lake env lean ../verification/H3_odd_tail.lean > /tmp/erdos137-tail.log 2>&1 &
-          tail_check=$!
-          timeout -k 5 360 lake env lean -Dprofiler=true H3OddBridgeSmoke.lean > /tmp/erdos137-bridge.log 2>&1
-          bridge_result=$?
-          wait "$graph_check"
-          graph_result=$?
-          wait "$tail_check"
-          tail_result=$?
-          wait "$primorial_check"
-          primorial_result=$?
-          cat /tmp/erdos137-primorial.log /tmp/erdos137-graph.log /tmp/erdos137-tail.log /tmp/erdos137-bridge.log
-          printf 'graph=%s tail=%s bridge=%s\n' "$graph_result" "$tail_result" "$bridge_result"
-          test "$primorial_result" = 0 && test "$graph_result" = 0 && test "$tail_result" = 0 && test "$bridge_result" = 0
+          set -euo pipefail
+          export OMA_FC="$PWD/formal-conjectures"
+          for reduction in verification/Erdos137*.R1.lean; do cp "$reduction" reductions/; done
+          proof=proofs/Erdos137.erdos_137.variants.perfect_power.R1.H3.R1.H2.lean
+          cp verification/H3_odd_submission.lean "$proof"
+          rc=0
+          bash tools/check.sh "$proof" "${RUNNER_TEMP}/erdos137-verdict.json" || rc=$?
+          python3 -m json.tool "${RUNNER_TEMP}/erdos137-verdict.json"
+          exit "$rc"
