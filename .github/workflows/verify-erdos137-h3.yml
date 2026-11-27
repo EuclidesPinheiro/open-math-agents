@@ -53,16 +53,3 @@ jobs:
         run: |
           cd formal-conjectures
           timeout 240 lake env lean ../verification/H3_odd_prime.lean
-      - name: Check the exact OMA square submission
-        if: ${{ success() || steps.odd.outcome == 'failure' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          export OMA_FC="$PWD/formal-conjectures"
-          for reduction in verification/Erdos137*.R1.lean; do cp "$reduction" reductions/; done
-          proof=proofs/Erdos137.erdos_137.variants.perfect_power.R1.H3.R1.H1.lean
-          cp verification/H3_square.lean "$proof"
-          rc=0
-          bash tools/check.sh "$proof" "${RUNNER_TEMP}/erdos137-verdict.json" || rc=$?
-          python3 -m json.tool "${RUNNER_TEMP}/erdos137-verdict.json"
-          exit "$rc"

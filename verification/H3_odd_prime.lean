@@ -1,4 +1,5 @@
 import FormalConjectures.ErdosProblems.«137»
+import Mathlib.Data.Nat.Choose.Factorization
 
 /-! Arithmetic lemmas for the odd prime exponent case of Erdős–Selfridge. -/
 
@@ -86,7 +87,7 @@ lemma cube_gap {x l : ℕ} (hl : 3 ≤ l) :
     _ ≤ (x + 1) ^ r * (x + 1) ^ 3 := Nat.mul_le_mul_right _ hMono
 
 lemma pair_product_injective {n k i j u v : ℕ}
-    (hn : k ^ 2 < n) (hij : i < j) (huv : u < v) (hj : j ≤ k) (hv : v ≤ k)
+    (hn : k ^ 2 < n) (hij : i ≤ j) (huv : u ≤ v) (hj : j ≤ k) (hv : v ≤ k)
     (h : (n + i) * (n + j) = (n + u) * (n + v)) : i = u ∧ j = v := by
   have hijBound : i * j ≤ k ^ 2 := by
     rw [pow_two]
@@ -194,8 +195,118 @@ theorem distinct_pair_products {n k l : ℕ} {a x : ℕ → ℕ}
     · exact heq
     · have hGap := scaled_pair_gap hn hl hA hLowT hgt
       omega
-  apply pair_product_injective hnSquare hij huv hj hv
+  apply pair_product_injective hnSquare hij.le huv.le hj hv
   rw [hS, hT, hEqual]
+
+lemma power_remainders (l t : ℕ) (hl : l ≠ 0) :
+    ∃ a x : ℕ, a ≠ 0 ∧ t = a * x ^ l ∧
+      ∀ p : ℕ, a.factorization p = t.factorization p % l := by
+  by_cases ht : t = 0
+  · subst t
+    exact ⟨1, 0, by decide, by simp [hl], by simp⟩
+  let remainders := Finsupp.mapRange (fun e : ℕ => e % l) (Nat.zero_mod l) t.factorization
+  let quotients := Finsupp.mapRange (fun e : ℕ => e / l) (Nat.zero_div l) t.factorization
+  have hRem : remainders ≤ t.factorization := fun p => Nat.mod_le _ _
+  have hQuot : quotients ≤ t.factorization := fun p => Nat.div_le_self _ _
+  let a := remainders.prod fun p e => p ^ e
+  let x := quotients.prod fun p e => p ^ e
+  have ha : a ≠ 0 := by
+    have hd : a ∣ t := Nat.prod_pow_dvd_of_le_factorization hRem
+    intro hz
+    rw [hz] at hd
+    exact ht (Nat.eq_zero_of_zero_dvd hd)
+  have hx : x ≠ 0 := by
+    have hd : x ∣ t := Nat.prod_pow_dvd_of_le_factorization hQuot
+    intro hz
+    rw [hz] at hd
+    exact ht (Nat.eq_zero_of_zero_dvd hd)
+  have hFactorA : a.factorization = remainders :=
+    Nat.factorization_prod_pow_eq_self_of_le_factorization hRem
+  have hFactorX : x.factorization = quotients :=
+    Nat.factorization_prod_pow_eq_self_of_le_factorization hQuot
+  refine ⟨a, x, ha, ?_, ?_⟩
+  · apply Nat.eq_of_factorization_eq ht (mul_ne_zero ha (pow_ne_zero l hx))
+    intro p
+    rw [Nat.factorization_mul ha (pow_ne_zero l hx), Nat.factorization_pow, hFactorA, hFactorX]
+    change t.factorization p = t.factorization p % l + l * (t.factorization p / l)
+    exact (Nat.mod_add_div _ _).symm
+  · intro p
+    rw [hFactorA]
+    exact Finsupp.mapRange_apply
+
+lemma two_power_remainders {l A B : ℕ} (hl : l ≠ 0)
+    (heq : ∀ p : ℕ, p.Prime → A.factorization p % l = B.factorization p % l) :
+    ∃ c x y : ℕ, c ≠ 0 ∧ A = c * x ^ l ∧ B = c * y ^ l := by
+  obtain ⟨a, x, ha, hA, haFac⟩ := power_remainders l A hl
+  obtain ⟨b, y, hb, hB, hbFac⟩ := power_remainders l B hl
+  have hab : a = b := by
+    apply Nat.eq_of_factorization_eq ha hb
+    intro p
+    rw [haFac, hbFac]
+    by_cases hp : p.Prime
+    · exact heq p hp
+    · rw [Nat.factorization_eq_zero_of_not_prime _ hp, Nat.factorization_eq_zero_of_not_prime _ hp]
+  exact ⟨a, x, y, ha, hA, hab.symm ▸ hB⟩
+
+lemma scaled_power_eq_of_in_pair_interval {n k l A B : ℕ}
+    (hk : 0 < k) (hn : k ^ l < n) (hl : 3 ≤ l)
+    (hA : n ^ 2 ≤ A ∧ A ≤ (n + k) ^ 2) (hB : n ^ 2 ≤ B ∧ B ≤ (n + k) ^ 2)
+    (heq : ∀ p : ℕ, p.Prime → A.factorization p % l = B.factorization p % l) : A = B := by
+  obtain ⟨c, x, y, hc, hX, hY⟩ := two_power_remainders (by omega) heq
+  have hnk : k < n := (Nat.le_pow (by omega : 0 < l)).trans_lt hn
+  have hBound : (n + k) ^ 2 < n ^ 2 + 3 * (n * k) := by
+    have hMul := Nat.mul_lt_mul_of_pos_right hnk hk
+    nlinarith only [hMul]
+  have hxy : x = y := by
+    rcases lt_trichotomy x y with hlt | he | hgt
+    · have hGap := scaled_pair_gap hn hl (Nat.pos_of_ne_zero hc) (hX ▸ hA.1) hlt
+      rw [← hX, ← hY] at hGap
+      omega
+    · exact he
+    · have hGap := scaled_pair_gap hn hl (Nat.pos_of_ne_zero hc) (hY ▸ hB.1) hgt
+      rw [← hY, ← hX] at hGap
+      omega
+  rw [hX, hY, hxy]
+
+lemma factorization_mul_power_mod {l a x : ℕ} (ha : a ≠ 0) (hx : x ≠ 0) (p : ℕ) :
+    (a * x ^ l).factorization p % l = a.factorization p % l := by
+  rw [Nat.factorization_mul ha (pow_ne_zero l hx), Nat.factorization_pow]
+  change (a.factorization p + l * x.factorization p) % l = a.factorization p % l
+  rw [Nat.add_mul_mod_self_left]
+
+theorem distinct_pair_products_mod_l {n k l : ℕ} {a x : ℕ → ℕ}
+    (hk : 0 < k) (hn : k ^ l < n) (hl : 3 ≤ l)
+    (hRepr : ∀ i ∈ Icc 1 k, n + i = a i * x i ^ l)
+    {i j u v : ℕ} (hi : 1 ≤ i) (hu : 1 ≤ u) (hij : i ≤ j) (huv : u ≤ v)
+    (hj : j ≤ k) (hv : v ≤ k)
+    (heq : ∀ p : ℕ, p.Prime →
+      (a i * a j).factorization p % l = (a u * a v).factorization p % l) :
+    i = u ∧ j = v := by
+  have hnSquare : k ^ 2 < n :=
+    (pow_le_pow_right' (by omega : 1 ≤ k) (show 2 ≤ l by omega)).trans_lt hn
+  have hBounds (r s : ℕ) (hr : r ≤ k) (hs : s ≤ k) :
+      n ^ 2 ≤ (n + r) * (n + s) ∧ (n + r) * (n + s) ≤ (n + k) ^ 2 := by
+    rw [pow_two, pow_two]
+    exact ⟨Nat.mul_le_mul (by omega) (by omega), Nat.mul_le_mul (by omega) (by omega)⟩
+  have hReprPair (r s : ℕ) (hr : r ∈ Icc 1 k) (hs : s ∈ Icc 1 k) :
+      (n + r) * (n + s) = (a r * a s) * (x r * x s) ^ l := by
+    rw [hRepr r hr, hRepr s hs, mul_pow]
+    ring
+  have hFac (r s : ℕ) (hr : r ∈ Icc 1 k) (hs : s ∈ Icc 1 k) (p : ℕ) :
+      ((n + r) * (n + s)).factorization p % l = (a r * a s).factorization p % l := by
+    have hPos : (n + r) * (n + s) ≠ 0 := mul_ne_zero (by omega) (by omega)
+    have hId := hReprPair r s hr hs
+    rw [hId] at hPos ⊢
+    have ha : a r * a s ≠ 0 := fun h => hPos (by rw [h, zero_mul])
+    have hx : x r * x s ≠ 0 := fun h => hPos (by rw [h, zero_pow (by omega : l ≠ 0), mul_zero])
+    exact factorization_mul_power_mod ha hx p
+  apply pair_product_injective hnSquare hij huv hj hv
+  apply scaled_power_eq_of_in_pair_interval hk hn hl (hBounds i j (hij.trans hj) hj)
+    (hBounds u v (huv.trans hv) hv)
+  intro p hp
+  rw [hFac i j (mem_Icc.mpr ⟨hi, hij.trans hj⟩) (mem_Icc.mpr ⟨hi.trans hij, hj⟩),
+    hFac u v (mem_Icc.mpr ⟨hu, huv.trans hv⟩) (mem_Icc.mpr ⟨hu.trans huv, hv⟩)]
+  exact heq p hp
 
 lemma factorization_le_of_dvd_difference {p i j : ℕ} (hp : p.Prime)
     (hi : i ≠ 0) (hij : i < j) (hMax : i.factorization p ≤ j.factorization p) :
