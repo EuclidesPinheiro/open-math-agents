@@ -300,11 +300,8 @@ private def baseTop (r : ℕ) : ℕ := 5029^r*167^((5000+r)/30-166)
 private def baseBottom (r : ℕ) : ℕ :=
   2501^((5000+r)/2-2500)*1667^((5000+r)/3-1666)*1001^((5000+r)/5-1000)
 
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-private lemma factorial_ratio_at_5000 :
-    factorialNumerator 5000*100^5000*100000000 ≤ factorialDenominator 5000*253^5000 := by
-  decide +kernel
+private def RatioBase : Prop :=
+    factorialNumerator 5000*100^5000*100000000 ≤ factorialDenominator 5000*253^5000
 
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 1500000 in
@@ -355,7 +352,7 @@ private lemma extend_base_ratio (N D t u q r m v c : ℕ)
 
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 1500000 in
-lemma factorial_ratio_base (r : Fin 30) :
+lemma factorial_ratio_base (r : Fin 30) (hExact : RatioBase) :
     factorialNumerator (5000+r.val)*100^(5000+r.val) ≤
       factorialDenominator (5000+r.val)*253^(5000+r.val) := by
   have hTable : ∀ j : Fin 30, baseTop j.val*100^j.val ≤ baseBottom j.val*100000000*253^j.val := by
@@ -367,7 +364,7 @@ lemma factorial_ratio_base (r : Fin 30) :
   calc
     _ ≤ (factorialNumerator 5000*baseTop r.val)*(100^5000*100^r.val) := Nat.mul_le_mul_right _ hA
     _ ≤ (factorialDenominator 5000*baseBottom r.val)*(253^5000*253^r.val) :=
-      extend_base_ratio _ _ _ _ _ _ _ _ _ factorial_ratio_at_5000 hRow
+      extend_base_ratio _ _ _ _ _ _ _ _ _ hExact hRow
     _ ≤ _ := Nat.mul_le_mul_right _ hB
 
 private lemma combine_ratio_bounds (a b A B q r m v : ℕ) (hb : 0 < b)
@@ -382,12 +379,12 @@ private lemma combine_ratio_bounds (a b A B q r m v : ℕ) (hb : 0 < b)
 
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 1500000 in
-theorem factorial_ratio_upper {n : ℕ} (hn : 5000 ≤ n) :
+theorem factorial_ratio_upper {n : ℕ} (hn : 5000 ≤ n) (hExact : RatioBase) :
     factorialNumerator n*100^n ≤ factorialDenominator n*253^n := by
   induction n using Nat.strong_induction_on with
   | h n ih =>
     by_cases hSmall : n < 5030
-    · have h := factorial_ratio_base ⟨n-5000,by omega⟩
+    · have h := factorial_ratio_base ⟨n-5000,by omega⟩ hExact
       change factorialNumerator (5000+(n-5000))*100^(5000+(n-5000)) ≤
         factorialDenominator (5000+(n-5000))*253^(5000+(n-5000)) at h
       rwa [show 5000+(n-5000) = n by omega] at h
@@ -402,11 +399,11 @@ theorem factorial_ratio_upper {n : ℕ} (hn : 5000 ≤ n) :
 
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 1500000 in
-lemma band_product_upper {n : ℕ} (hn : 5000 ≤ n) :
+lemma band_product_upper {n : ℕ} (hn : 5000 ≤ n) (hExact : RatioBase) :
     (primeBandProduct n : ℚ) ≤ (253/100 : ℚ)^n := by
   have hD := factorial_ratio_contains_prime_band n
   have hLE := Nat.le_of_dvd (Nat.pos_of_ne_zero (numerator_ne_zero n)) hD
-  have hBound := (Nat.mul_le_mul_right (100^n) hLE).trans (factorial_ratio_upper hn)
+  have hBound := (Nat.mul_le_mul_right (100^n) hLE).trans (factorial_ratio_upper hn hExact)
   have hCast : primeBandProduct n*100^n ≤ 253^n := by
     have h₁ : (primeBandProduct n*100^n)*factorialDenominator n ≤
         253^n*factorialDenominator n := by
@@ -419,11 +416,8 @@ lemma band_product_upper {n : ℕ} (hn : 5000 ≤ n) :
 def smallPrimorialBands : List (ℕ × ℕ) :=
   [(0,1), (2,4), (5,10), (11,16), (17,22), (23,30), (31,42), (43,58), (59,72), (73,96), (97,126), (127,156), (157,192), (193,232), (233,276), (277,336), (337,400), (401,466), (467,562), (563,658), (659,768), (769,886), (887,1030), (1031,1192), (1193,1380), (1381,1582), (1583,1810), (1811,2082), (2083,2380), (2381,2712), (2713,3088), (3089,3532), (3533,4012), (4013,4560), (4561,4999)]
 
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma small_primorial_band_bounds :
-    ∀ b ∈ smallPrimorialBands, primorial b.2 * 20^b.1 ≤ 61^b.1 := by
-  decide +kernel
+private def PrimorialBase : Prop :=
+    ∀ b ∈ smallPrimorialBands, primorial b.2 * 20^b.1 ≤ 61^b.1
 
 private def PrimorialBandCover (start : ℕ) : List (ℕ × ℕ) → Prop
   | [] => 5000 ≤ start
@@ -450,10 +444,10 @@ private lemma primorial_band_cover_of_chain (start r : ℕ) (bands : List (ℕ �
     · obtain ⟨z,hB,h₁,h₂⟩ := ih (b.2+1) hNext (by omega)
       exact ⟨z,List.mem_cons_of_mem _ hB,h₁,h₂⟩
 
-lemma primorial_base (r : Fin 5000) : primorial r.val * 20^r.val ≤ 61^r.val := by
+lemma primorial_base (r : Fin 5000) (hBands : PrimorialBase) : primorial r.val * 20^r.val ≤ 61^r.val := by
   obtain ⟨b,hb,hlo,hhi⟩ := primorial_band_cover_of_chain 0 r.val smallPrimorialBands
     (by decide) (Nat.zero_le _) r.isLt
-  have h : primorial b.2 * 20^b.1 ≤ 61^b.1 := small_primorial_band_bounds b hb
+  have h : primorial b.2 * 20^b.1 ≤ 61^b.1 := hBands b hb
   have hd : r.val = b.1 + (r.val-b.1) := by omega
   have hpow : (20 : ℕ)^(r.val-b.1) ≤ 61^(r.val-b.1) := pow_le_pow_left' (by decide) _
   calc
@@ -465,16 +459,16 @@ lemma primorial_base (r : Fin 5000) : primorial r.val * 20^r.val ≤ 61^r.val :=
 
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 1500000 in
-theorem primorial_le_61_over_20 (n : ℕ) :
+theorem primorial_le_61_over_20 (n : ℕ) (hExact : RatioBase) (hBands : PrimorialBase) :
     (primorial n : ℚ) ≤ (61/20 : ℚ)^n := by
   induction n using Nat.strong_induction_on with
   | h n ih =>
     by_cases hSmall : n < 5000
     · rw [div_pow]
       apply (le_div_iff₀ (by positivity)).2
-      have h := primorial_base ⟨n,hSmall⟩
+      have h := primorial_base ⟨n,hSmall⟩ hBands
       exact_mod_cast h
-    · have hBand := band_product_upper (show 5000 ≤ n by omega)
+    · have hBand := band_product_upper (show 5000 ≤ n by omega) hExact
       have hSmallP := ih (n/6) (Nat.div_lt_self (by omega) (by decide))
       have hMul : (primorial n : ℚ) = (primorial (n/6) : ℚ) * primeBandProduct n := by
         exact_mod_cast (band_product_mul_primorial n).symm
@@ -495,14 +489,29 @@ theorem primorial_le_61_over_20 (n : ℕ) :
 
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 1500000 in
-theorem primorial_eighth_le (n : ℕ) : (primorial n)^8 ≤ 2^(13*n) := by
+theorem primorial_eighth_le_of_bases (n : ℕ) (hExact : RatioBase) (hBands : PrimorialBase) : (primorial n)^8 ≤ 2^(13*n) := by
   have h : (primorial n : ℚ)^8 ≤ (2:ℚ)^(13*n) := by
     calc
-      _ ≤ ((61/20 : ℚ)^n)^8 := pow_le_pow_left₀ (by positivity) (primorial_le_61_over_20 n) _
+      _ ≤ ((61/20 : ℚ)^n)^8 := pow_le_pow_left₀ (by positivity) (primorial_le_61_over_20 n hExact hBands) _
       _ = ((61/20 : ℚ)^8)^n := by rw [← pow_mul, ← pow_mul, Nat.mul_comm n 8]
       _ ≤ ((2:ℚ)^13)^n := pow_le_pow_left₀ (by positivity) (by norm_num) _
       _ = _ := by rw [← pow_mul]
   exact_mod_cast h
+
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+private lemma factorial_ratio_at_5000 : RatioBase := by
+  unfold RatioBase
+  decide +kernel
+
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+lemma small_primorial_band_bounds : PrimorialBase := by
+  unfold PrimorialBase
+  decide +kernel
+
+theorem primorial_eighth_le (n : ℕ) : (primorial n)^8 ≤ 2^(13*n) :=
+  primorial_eighth_le_of_bases n factorial_ratio_at_5000 small_primorial_band_bounds
 
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 1500000 in
