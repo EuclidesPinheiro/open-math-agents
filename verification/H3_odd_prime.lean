@@ -1039,7 +1039,8 @@ private structure FactorCoverRow where
   deriving DecidableEq
 
 private def rightFactors (B L : ℕ) : Finset ℕ :=
-  (Ioc 0 B).filter fun t => ∀ p ∈ range (B+1), p ∣ t → p.Prime → p ≤ L
+  (range (B+1)).filter fun t => 0 < t ∧
+    ((List.range (B+1)).all fun p => decide (p ∣ t → p.Prime → p ≤ L)) = true
 
 private def leftFactorsForRow (row : FactorCoverRow) (x : ℕ) : Finset ℕ :=
   (coprimePrefix row.period (x/(row.prime*row.minDiv))).image (row.prime*·)
@@ -1147,8 +1148,11 @@ private lemma graph_density_from_rows (rows : Finset FactorCoverRow)
   have hCover : ∀ t ∈ S, ∃ u ∈ U, ∃ v ∈ V, t = u*v := by
     intro t ht
     obtain ⟨u,v,he,hu,hv,hvB,hSupport,hEnd⟩ := greedy_small_factor B L t hB (hS t ht).1
-    have hvV : v ∈ V := mem_filter.mpr ⟨mem_Ioc.mpr ⟨hv,hvB⟩,fun p _ hd hp =>
-      hSupport p (Nat.mem_primeFactors.mpr ⟨hp,hd,hv.ne'⟩)⟩
+    have hvV : v ∈ V := by
+      change v ∈ rightFactors B L
+      refine mem_filter.mpr ⟨mem_range.mpr (by omega),hv,List.all_eq_true.mpr ?_⟩
+      intro p _
+      exact decide_eq_true (fun hd hp => hSupport p (Nat.mem_primeFactors.mpr ⟨hp,hd,hv.ne'⟩))
     have hSize : u*v ≤ x := he ▸ (hS t ht).2
     refine ⟨u, ?_, v,hvV,he⟩
     rcases hEnd with hu1 | hLarge | ⟨hOver,hSorted⟩

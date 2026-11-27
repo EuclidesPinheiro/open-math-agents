@@ -53,5 +53,19 @@ jobs:
         run: |
           cd formal-conjectures
           awk '{ print } /^end Erdos137PerfectPower/ { exit }' ../verification/H3_odd_prime.lean > H3OddGraphAudit.lean
-          printf '\n#print axioms Erdos137PerfectPower.distinct_products_rank_bounds\n#print axioms Erdos137PerfectPower.odd_branch_from_rank_certificate\n' >> H3OddGraphAudit.lean
-          timeout 1200 lake env lean H3OddGraphAudit.lean
+          awk '/^private lemma dyadic_rank_intervals_valid/ { exit } { print }' ../verification/H3_odd_bridge.lean | head -n -2 > H3OddBridgeSmoke.lean
+          printf '\nend Erdos137OddBridge\n' >> H3OddBridgeSmoke.lean
+          set +e
+          timeout 1200 lake env lean H3OddGraphAudit.lean > /tmp/erdos137-graph.log 2>&1 &
+          graph_check=$!
+          timeout 1200 lake env lean ../verification/H3_odd_tail.lean > /tmp/erdos137-tail.log 2>&1 &
+          tail_check=$!
+          timeout 1200 lake env lean H3OddBridgeSmoke.lean > /tmp/erdos137-bridge.log 2>&1
+          bridge_result=$?
+          wait "$graph_check"
+          graph_result=$?
+          wait "$tail_check"
+          tail_result=$?
+          cat /tmp/erdos137-graph.log /tmp/erdos137-tail.log /tmp/erdos137-bridge.log
+          printf 'graph=%s tail=%s bridge=%s\n' "$graph_result" "$tail_result" "$bridge_result"
+          test "$graph_result" = 0 && test "$tail_result" = 0 && test "$bridge_result" = 0
