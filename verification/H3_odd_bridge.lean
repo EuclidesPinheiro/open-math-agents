@@ -659,12 +659,15 @@ private lemma candidate_list_nodup : primeCandidates.Nodup := by
 def primeCandidateTable : Finset ℕ :=
   ⟨(primeCandidates : Multiset ℕ), candidate_list_nodup⟩
 
+set_option maxRecDepth 10000 in
+private lemma early_wheel_length : 30001/210 < earlyWheelCodes.length := by decide
+
 lemma prime_mem_candidate_table {p : ℕ} (hp : p.Prime) (hTop : p < 30001) : p ∈ primeCandidateTable := by
   change p ∈ primeCandidates
   rw [candidate_list_from_wheel,List.mem_append]
   by_cases hp8 : 8 ≤ p
   · right
-    have hLen : 30001/210 < earlyWheelCodes.length := by decide
+    have hLen := early_wheel_length
     have hQ := Nat.div_le_div_right (c := 210) hTop.le
     exact prime_in_wheel_blocks 0 earlyWheelCodes hp8 hTop hp (prime_wheel_residue hp (by omega))
       (Nat.zero_le _) (by omega)
