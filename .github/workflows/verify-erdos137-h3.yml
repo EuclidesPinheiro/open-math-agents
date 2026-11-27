@@ -54,4 +54,4 @@ jobs:
           cd formal-conjectures
           cp ../verification/H3_odd_prime.lean H3OddAudit.lean
           printf '\n#print axioms Erdos137PerfectPower.distinct_pair_products_mod_l\n#print axioms Erdos137PerfectPower.distinct_multiset_products_mod_l\n#print axioms Erdos137PerfectPower.restricted_prod_dvd_factorial\n#print axioms Erdos137PerfectPower.three_odd_exponent_of_sylvester\n#print axioms Erdos137PerfectPower.factor_cover_card_of_distinct_products\n' >> H3OddAudit.lean
-          timeout 240 lake env lean H3OddAudit.lean
+          timeout 720 lake env lean H3OddAudit.lean

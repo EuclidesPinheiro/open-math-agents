@@ -1,6 +1,7 @@
 import FormalConjectures.ErdosProblems.«137»
 import Mathlib.Data.Nat.Choose.Factorization
 import Mathlib.Data.Finset.Powerset
+import Mathlib.Data.ZMod.Basic
 
 /-! Arithmetic lemmas for the odd prime exponent case of Erdős–Selfridge. -/
 
@@ -860,5 +861,183 @@ theorem factor_cover_card_of_distinct_products (S U V : Finset ℕ)
     card_filter_add_card_filter_not (s := S) (fun t => t = anchor (u t))
   rw [Finset.card_powersetCard] at hRest
   exact hCard ▸ Nat.add_le_add hFirst hRest
+
+end Erdos137PerfectPower
+
+namespace Erdos137PerfectPower
+
+open Finset
+
+theorem ratio_residue_bound {n k l : ℕ} {a x : ℕ → ℕ} (S P : Finset ℕ)
+    (hk : 0 < k) (hn : k^l < n) (hl : 3 ≤ l) (hTop : (k+1)^l ≤ n+k)
+    (hRepr : ∀ i ∈ Icc 1 k, n+i = a i * x i ^ l)
+    (hS : S ⊆ Icc 1 k) (ha : ∀ i ∈ S, a i ≠ 0)
+    (hSupport : ∀ i ∈ S, (a i).primeFactors ⊆ P) :
+    S.card * (S.card - 1) ≤ l ^ P.card := by
+  classical
+  letI : NeZero l := ⟨by omega⟩
+  let ratio := fun r : ℕ × ℕ => fun p : P =>
+    ((a r.1).factorization p : ZMod l) - (a r.2).factorization p
+  have hZero (i : ℕ) (hi : i ∈ S) (p : ℕ) (hp : p.Prime) (hpP : p ∉ P) :
+      (a i).factorization p = 0 :=
+    Nat.factorization_eq_zero_of_not_dvd (fun hd => hpP (hSupport i hi
+      (Nat.mem_primeFactors.mpr ⟨hp, hd, ha i hi⟩)))
+  have hInj : Set.InjOn ratio ↑S.offDiag := by
+    rintro ⟨i,j⟩ hij ⟨u,v⟩ huv hEq
+    obtain ⟨hi,hj,hijNe⟩ := mem_offDiag.mp hij
+    obtain ⟨hu,hv,huvNe⟩ := mem_offDiag.mp huv
+    have hMod (p : ℕ) (hp : p.Prime) :
+        (a i * a v).factorization p % l = (a u * a j).factorization p % l := by
+      rw [Nat.factorization_mul (ha i hi) (ha v hv), Nat.factorization_mul (ha u hu) (ha j hj),
+        Finsupp.add_apply, Finsupp.add_apply]
+      by_cases hP : p ∈ P
+      · have hCoord := congrFun hEq (⟨p,hP⟩ : P)
+        change ((a i).factorization p : ZMod l) - (a j).factorization p =
+          ((a u).factorization p : ZMod l) - (a v).factorization p at hCoord
+        have hAdd := sub_eq_sub_iff_add_eq_add.mp hCoord
+        exact (ZMod.natCast_eq_natCast_iff _ _ _).mp (by simpa only [Nat.cast_add] using hAdd)
+      · simp [hZero i hi p hp hP, hZero j hj p hp hP, hZero u hu p hp hP, hZero v hv p hp hP]
+    let A : Multiset ℕ := i ::ₘ {v}
+    let B : Multiset ℕ := u ::ₘ {j}
+    have hA : ∀ t ∈ A, t ∈ Icc 1 k := by
+      intro t ht
+      simp only [A, Multiset.mem_cons, Multiset.mem_singleton] at ht
+      rcases ht with rfl | rfl
+      · exact hS hi
+      · exact hS hv
+    have hB : ∀ t ∈ B, t ∈ Icc 1 k := by
+      intro t ht
+      simp only [B, Multiset.mem_cons, Multiset.mem_singleton] at ht
+      rcases ht with rfl | rfl
+      · exact hS hu
+      · exact hS hj
+    have hAB := distinct_multiset_products_mod_l hk hn (by omega) hTop hRepr
+      A B hA hB (by simp [A,B]) (by simpa [A] using (show 2 < l by omega))
+      (by intro p hp; simpa [A,B] using hMod p hp)
+    have hiB : i ∈ B := hAB ▸ (Multiset.mem_cons_self _ _ : i ∈ A)
+    have hiU : i = u := (show i = u ∨ i = j by simpa [B] using hiB).resolve_right hijNe
+    have hSum := congrArg Multiset.sum hAB
+    simp [A,B] at hSum
+    exact Prod.ext hiU (by omega)
+  have hCard : S.offDiag.card ≤ Fintype.card (P → ZMod l) := by
+    have := Finset.card_le_card_of_injOn ratio
+      (fun (r : ℕ × ℕ) (_ : r ∈ S.offDiag) => mem_univ (ratio r)) hInj
+    simpa using this
+  simpa [Finset.offDiag_card, Fintype.card_fun, Fintype.card_coe, ZMod.card, Nat.mul_sub_left_distrib,
+    pow_two, Nat.mul_comm] using hCard
+
+def intervalMultiples (n k p : ℕ) : Finset ℕ :=
+  (Ioc n (n+k)).filter (p ∣ ·)
+
+lemma interval_multiples_card_le (n k p : ℕ) (hp : 0 < p) :
+    (intervalMultiples n k p).card ≤ (k+p-1)/p := by
+  let left := (Ioc 0 n).filter (p ∣ ·)
+  have hUnion : (Ioc 0 (n+k)).filter (p ∣ ·) = left ∪ intervalMultiples n k p := by
+    ext m
+    simp only [left, intervalMultiples, mem_union, mem_filter, mem_Ioc]
+    omega
+  have hDisj : Disjoint left (intervalMultiples n k p) := by
+    rw [Finset.disjoint_left]
+    intro m hl hr
+    have hl' := mem_Ioc.mp (mem_filter.mp hl).1
+    have hr' := mem_Ioc.mp (mem_filter.mp hr).1
+    omega
+  have hCard : (n+k)/p = n/p + (intervalMultiples n k p).card := by
+    have h := congrArg Finset.card hUnion
+    rw [Finset.card_union_of_disjoint hDisj, Nat.Ioc_filter_dvd_card_eq_div] at h
+    dsimp only [left] at h
+    rw [Nat.Ioc_filter_dvd_card_eq_div] at h
+    exact h
+  have hEq : (n+k)/p = (n%p+k)/p + n/p := by
+    have hSplit := Nat.mod_add_div n p
+    calc
+      (n+k)/p = (n%p+k+p*(n/p))/p := by
+        rw [show n+k = n%p+k+p*(n/p) by omega]
+      _ = (n%p+k)/p + n/p := Nat.add_mul_div_left _ _ hp
+  have hMod := Nat.mod_lt n hp
+  have hLe : (n%p+k)/p ≤ (k+p-1)/p := Nat.div_le_div_right (by omega)
+  omega
+
+def lowPrimes (k cutoff : ℕ) : Finset ℕ :=
+  (range k).filter fun p => p.Prime ∧ p ≤ cutoff
+
+def highPrimes (k cutoff : ℕ) : Finset ℕ :=
+  (range k).filter fun p => p.Prime ∧ cutoff < p
+
+def smoothLowerBound (k cutoff : ℕ) : ℕ :=
+  k - ∑ p ∈ highPrimes k cutoff, (k+p-1)/p
+
+theorem good_smooth_coefficients {n k l : ℕ} {a x : ℕ → ℕ} (cutoff : ℕ)
+    (hRepr : ∀ i ∈ Icc 1 k, n+i = a i * x i ^ l)
+    (hSupport : ∀ i ∈ Icc 1 k, ∀ p ∈ (a i).primeFactors, p < k) :
+    ∃ S ⊆ Icc 1 k, smoothLowerBound k cutoff ≤ S.card ∧
+      ∀ i ∈ S, (a i).primeFactors ⊆ lowPrimes k cutoff := by
+  let R := Icc 1 k
+  let bad := fun p : ℕ => R.filter fun i => p ∣ n+i
+  let excluded := (highPrimes k cutoff).biUnion bad
+  let allowed := R \ excluded
+  have hSub : allowed ⊆ R := sdiff_subset
+  have hExcluded : excluded ⊆ R := by
+    intro i hi
+    obtain ⟨p, hp, hi⟩ := mem_biUnion.mp hi
+    exact (mem_filter.mp hi).1
+  have hBoundPrime (p : ℕ) (hp : p ∈ highPrimes k cutoff) :
+      (bad p).card ≤ (k+p-1)/p := by
+    have hpPrime := (mem_filter.mp hp).2.1
+    refine (Finset.card_le_card_of_injOn (n+·) ?_ ?_ :
+      (bad p).card ≤ (intervalMultiples n k p).card).trans (interval_multiples_card_le n k p hpPrime.pos)
+    · intro i hi
+      obtain ⟨hR,hDvd⟩ := mem_filter.mp hi
+      have hiB := mem_Icc.mp hR
+      exact mem_filter.mpr ⟨mem_Ioc.mpr ⟨by omega, by omega⟩, hDvd⟩
+    · intro i _ j _ e
+      change n+i = n+j at e
+      omega
+  have hBound : excluded.card ≤ ∑ p ∈ highPrimes k cutoff, (k+p-1)/p :=
+    Finset.card_biUnion_le.trans (Finset.sum_le_sum hBoundPrime)
+  have hR : R.card = k := by simp [R, Nat.card_Icc]
+  have hCount : allowed.card + excluded.card = k :=
+    (Finset.card_sdiff_add_card_eq_card hExcluded).trans hR
+  refine ⟨allowed, hSub, ?_, ?_⟩
+  · unfold smoothLowerBound
+    omega
+  · intro i hi p hp
+    have hiR := hSub hi
+    have hpK := hSupport i hiR p hp
+    obtain ⟨hP, hd, _⟩ := Nat.mem_primeFactors.mp hp
+    refine mem_filter.mpr ⟨mem_range.mpr hpK, hP, ?_⟩
+    by_contra! hpCut
+    have hBad : p ∈ highPrimes k cutoff := mem_filter.mpr ⟨mem_range.mpr hpK, hP, hpCut⟩
+    have hPN : p ∣ n+i := by
+      rw [hRepr i hiR]
+      exact hd.trans (dvd_mul_right _ _)
+    exact (mem_sdiff.mp hi).2 (mem_biUnion.mpr ⟨p,hBad,mem_filter.mpr ⟨hiR,hPN⟩⟩)
+
+def smallOddCutoff (k : ℕ) : ℕ :=
+  if k < 10 then 3 else if k < 28 then 5 else if k < 77 then 7
+  else if k < 143 then 11 else if k < 340 then 13 else if k < 646 then 17 else 19
+
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+lemma small_cubic_certificate : ∀ r : Fin 997,
+    let k := r.val+4
+    let c := smallOddCutoff k
+    3^(lowPrimes k c).card < smoothLowerBound k c * (smoothLowerBound k c-1) := by
+  decide
+
+theorem small_cubic_of_sylvester {n k : ℕ} (hk : 4 ≤ k) (hkUpper : k ≤ 1000)
+    (hSylvester : ∃ p : ℕ, p.Prime ∧ k < p ∧ p ∣ ∏ t ∈ Ioc n (n+k), t) :
+    ∃ p : ℕ, k ≤ p ∧ p.Prime ∧ ¬ 3 ∣ (∏ t ∈ Ioc n (n+k), t).factorization p := by
+  by_contra! hAll
+  obtain ⟨hN,hTop⟩ := sylvester_schur_power_bounds_of_no_witness (by decide) hSylvester hAll
+  obtain ⟨a,x,ha,hRepr,hSupport,_⟩ := normalize_odd_coefficients (by decide) hAll
+  obtain ⟨S,hS,hCount,hPrime⟩ := good_smooth_coefficients (smallOddCutoff k) hRepr hSupport
+  have hBound := ratio_residue_bound S (lowPrimes k (smallOddCutoff k))
+    (by omega) hN (by decide) hTop hRepr hS (fun i hi => ha i (hS hi)) hPrime
+  have hNumeric := small_cubic_certificate ⟨k-4, by omega⟩
+  dsimp only at hNumeric
+  rw [show k-4+4 = k by omega] at hNumeric
+  have hCountProduct := Nat.mul_le_mul hCount (Nat.sub_le_sub_right hCount 1)
+  exact (not_lt_of_ge (hCountProduct.trans hBound)) hNumeric
 
 end Erdos137PerfectPower
