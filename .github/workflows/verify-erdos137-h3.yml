@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        part: [bridge, primorial]
+        part: [medium]
     env:
       PART: ${{ matrix.part }}
     runs-on: ubuntu-latest

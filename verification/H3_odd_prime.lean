@@ -2104,20 +2104,34 @@ private lemma fast_small_odd_certificates : ∀ band ∈ smallOddBands,
       5^m < (f+3).choose 4 ∧ 5*6^m ≤ (f+4)*5^m := by
   decide
 
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-private lemma small_odd_band_cover : ∀ r : Fin 997, ∃ band ∈ smallOddBands,
-    band.lower ≤ r.val+4 ∧ r.val+4 ≤ band.upper := by
-  decide
+private def bandEnd {α : Type} (upper : α → ℕ) : ℕ → List α → ℕ
+  | start, [] => start
+  | _, band :: rest => bandEnd upper (upper band+1) rest
+
+private def consecutiveBands {α : Type} (lower upper : α → ℕ) : ℕ → List α → Bool
+  | _, [] => true
+  | start, band :: rest =>
+    decide (lower band = start ∧ lower band ≤ upper band) && consecutiveBands lower upper (upper band+1) rest
+
+private lemma consecutive_bands_cover {α : Type} (lower upper : α → ℕ) (bands : List α) {start k : ℕ}
+    (hC : consecutiveBands lower upper start bands = true) (hLo : start ≤ k)
+    (hHi : k < bandEnd upper start bands) : ∃ band ∈ bands, lower band ≤ k ∧ k ≤ upper band := by
+  induction bands generalizing start with
+  | nil =>
+    simp only [bandEnd] at hHi
+    omega
+  | cons band rest ih =>
+    simp only [consecutiveBands, Bool.and_eq_true, decide_eq_true_eq] at hC
+    by_cases hB : k ≤ upper band
+    · exact ⟨band, by simp, by omega, hB⟩
+    · obtain ⟨other,ho,hL,hU⟩ := ih (start := upper band+1) hC.2 (by omega) hHi
+      exact ⟨other,by simp [ho],hL,hU⟩
 
 private lemma small_odd_certificate {k : ℕ} (hk : 4 ≤ k) (hkUpper : k ≤ 1000) :
     ∃ c f m : ℕ, f ≤ smoothLowerBound k c ∧ (lowPrimes k c).card ≤ m ∧
       3^m < f*(f-1) ∧ 0 < f ∧ 5^m < (f+3).choose 4 ∧ 5*6^m ≤ (f+4)*5^m := by
-  obtain ⟨band, hBand, hLo, hHi⟩ := small_odd_band_cover ⟨k-4, by omega⟩
-  change band.lower ≤ k-4+4 at hLo
-  change k-4+4 ≤ band.upper at hHi
-  have h : k-4+4 = k := by omega
-  rw [h] at hLo hHi
+  obtain ⟨band,hBand,hLo,hHi⟩ := consecutive_bands_cover OddBand.lower OddBand.upper smallOddBands
+    (by decide) hk (by change k < 1001; omega)
   have hCert := fast_small_odd_certificates band hBand
   dsimp only at hCert
   rcases hCert with ⟨hUpper, hCert⟩
@@ -2213,32 +2227,9 @@ private def mediumOddBands : List MediumBand := [
   ⟨26042, 27727, 17, 157⟩, ⟨27728, 29474, 17, 163⟩, ⟨29475, 30000, 19, 167⟩
 ]
 
-private def intervalEnd : ℕ → List MediumBand → ℕ
-  | start, [] => start
-  | _, band :: rest => intervalEnd (band.upper+1) rest
-
-private def contiguous : ℕ → List MediumBand → Bool
-  | _, [] => true
-  | start, band :: rest =>
-    decide (band.lower = start ∧ band.lower ≤ band.upper) && contiguous (band.upper+1) rest
-
-private lemma cover_contiguous (bands : List MediumBand) {start k : ℕ}
-    (hC : contiguous start bands = true) (hLo : start ≤ k) (hHi : k < intervalEnd start bands) :
-    ∃ band ∈ bands, band.lower ≤ k ∧ k ≤ band.upper := by
-  induction bands generalizing start with
-  | nil =>
-    simp only [intervalEnd] at hHi
-    omega
-  | cons band rest ih =>
-    simp only [contiguous, Bool.and_eq_true, decide_eq_true_eq] at hC
-    by_cases hB : k ≤ band.upper
-    · exact ⟨band, by simp, by omega, hB⟩
-    · obtain ⟨other, ho, hL, hU⟩ := ih (start := band.upper+1) hC.2 (by omega) hHi
-      exact ⟨other, by simp [ho], hL, hU⟩
-
 private lemma medium_band_cover {k : ℕ} (hk : 1001 ≤ k) (hkU : k ≤ 30000) :
     ∃ band ∈ mediumOddBands, band.lower ≤ k ∧ k ≤ band.upper :=
-  cover_contiguous mediumOddBands (by decide) hk (by
+  consecutive_bands_cover MediumBand.lower MediumBand.upper mediumOddBands (by decide) hk (by
     change k < 30001
     omega)
 
