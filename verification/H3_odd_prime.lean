@@ -958,7 +958,7 @@ theorem smooth_multiset_residue_bound {n k l d : ℕ} {a x : ℕ → ℕ} (S P :
   have hFacZero (s : Sym S d) (p : ℕ) (hp : p.Prime) (hpP : p ∉ P) :
       (s.val.map coeff).prod.factorization p = 0 := by
     rw [multiset_prod_factorization _ p]
-    · apply Multiset.sum_eq_zero.mpr
+    · apply Multiset.sum_eq_zero
       intro e he
       obtain ⟨t,ht,rfl⟩ := Multiset.mem_map.mp he
       obtain ⟨i,_,rfl⟩ := Multiset.mem_map.mp ht
@@ -969,12 +969,12 @@ theorem smooth_multiset_residue_bound {n k l d : ℕ} {a x : ℕ → ℕ} (S P :
       exact ha i.val i.property
   have hInj : Function.Injective residue := by
     intro s t h
-    have hs : (s.val.map Subtype.val).card = d := (Multiset.card_map _).trans s.property
-    have ht : (t.val.map Subtype.val).card = d := (Multiset.card_map _).trans t.property
+    have hs : (s.val.map Subtype.val).card = d := (Multiset.card_map _ _).trans s.property
+    have ht : (t.val.map Subtype.val).card = d := (Multiset.card_map _ _).trans t.property
     apply Subtype.ext
     apply Multiset.map_injective (f := Subtype.val) Subtype.val_injective
     apply distinct_multiset_products_mod_l hk hn hl hTop hRepr _ _
-      (hActual s) (hActual t) (hs.trans ht.symm) (hs ▸ hd)
+      (hActual s) (hActual t) (hs.trans ht.symm) (by rwa [hs])
     intro p hp
     simp only [Multiset.map_map]
     change (s.val.map coeff).prod.factorization p % l =
@@ -1128,6 +1128,7 @@ theorem good_smooth_coefficients {n k l : ℕ} {a x : ℕ → ℕ} (cutoff : ℕ
     · intro i hi
       obtain ⟨hR,hDvd⟩ := mem_filter.mp hi
       have hiB := mem_Icc.mp hR
+      change n+i ∈ intervalMultiples n k p
       exact mem_filter.mpr ⟨mem_Ioc.mpr ⟨by omega, by omega⟩, hDvd⟩
     · intro i _ j _ e
       change n+i = n+j at e
