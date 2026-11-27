@@ -162,19 +162,19 @@ lemma pow_prime_card_le_mul_primorial (k : ℕ) : k^((k-1).primesLE.card) ≤
     _ = ∏ _ ∈ (k-1).primesLE, k := (prod_const _).symm
     _ ≤ _ := prod_le_prod' fun p hp => le_dyadic_height k p (Nat.mem_primesLE.mp hp).2.pos
 
-def dyadicPrimeBound (n : ℕ) (countUpper : ℕ → ℕ) : ℕ :=
-  (104*(n-1) + 64*(∑ j ∈ range n.log2, countUpper (n/2^(j+1)))) / ((n^64).log2-64)
+def dyadicPrimeBound (n f : ℕ) (countUpper : ℕ → ℕ) : ℕ :=
+  (104*(n-1) + 64*(∑ j ∈ range n.log2, countUpper (n/2^(j+1)))) / (f-64)
 
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 1000000 in
-lemma dyadic_prime_bound_valid {n : ℕ} (hn : 3 ≤ n) (countUpper : ℕ → ℕ)
+lemma dyadic_prime_bound_valid {n f : ℕ} (hF : 64 < f) (hLower : 2^f ≤ n^64)
+    (countUpper : ℕ → ℕ)
     (hCount : ∀ m, m.primesLE.card ≤ countUpper m)
     (hPrimorial : ∀ m : ℕ, (primorial m)^8 ≤ 2^(13*m)) :
-    (n-1).primesLE.card ≤ dyadicPrimeBound n countUpper := by
+    (n-1).primesLE.card ≤ dyadicPrimeBound n f countUpper := by
   let P := (n-1).primesLE.card
   let w := ∑ p ∈ (n-1).primesLE, dyadicHeight n p
   let b := ∑ j ∈ range n.log2, countUpper (n/2^(j+1))
-  let f := (n^64).log2
   have hW : w ≤ P+b := (height_sum_bound_split n).trans
     (Nat.add_le_add_left (sum_le_sum (fun j _ => hCount _)) _)
   have hBound : (n^P)^8 ≤ 2^(8*w+13*(n-1)) := by
@@ -183,7 +183,6 @@ lemma dyadic_prime_bound_valid {n : ℕ} (hn : 3 ≤ n) (countUpper : ℕ → �
       _ = 2^(w*8)*(primorial (n-1))^8 := by rw [mul_pow, ← pow_mul]
       _ ≤ 2^(w*8)*2^(13*(n-1)) := Nat.mul_le_mul_left _ (hPrimorial _)
       _ = _ := by rw [pow_add, Nat.mul_comm 8]
-  have hLower : 2^f ≤ n^64 := Nat.log2_self_le (by positivity)
   have hPow : 2^(f*P) ≤ 2^(64*w+104*(n-1)) := by
     calc
       _ = (2^f)^P := pow_mul _ _ _
@@ -194,9 +193,6 @@ lemma dyadic_prime_bound_valid {n : ℕ} (hn : 3 ≤ n) (countUpper : ℕ → �
   have hExp : f*P ≤ 64*w+104*(n-1) := by
     by_contra! h
     exact (not_lt_of_ge hPow) (Nat.pow_lt_pow_right (by decide) h)
-  have hF : 64 < f := by
-    apply (Nat.le_log2 (by positivity : n^64 ≠ 0)).2
-    exact (show (2:ℕ)^65 ≤ 3^64 by decide).trans (pow_le_pow_left' hn _)
   have hLin : (f-64)*P ≤ 104*(n-1) + 64*b := by
     have hEq : f*P = (f-64)*P+64*P := by
       conv_lhs => rw [show f = (f-64)+64 by omega,Nat.add_mul]
@@ -302,7 +298,7 @@ lemma tail_from_prime_estimates (k : ℕ) (hk : 2^21 ≤ k)
           rw [← pow_mul, ← pow_mul]
           apply Nat.pow_le_pow_right (by decide)
           rw [Nat.mul_comm _ 12, Nat.mul_comm _ 8]
-          exact hExp
+          simpa only [← Nat.mul_assoc] using hExp
     by_contra! h
     exact (not_lt_of_ge hh) (Nat.pow_lt_pow_left h (by decide))
   exact tail_rank_contradiction k P hk hP hCoeff hPower
