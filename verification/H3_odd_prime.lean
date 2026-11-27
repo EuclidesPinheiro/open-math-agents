@@ -886,6 +886,331 @@ theorem product_lower_bound_from_maxima (S : Finset ℕ) (lower : ℕ → ℕ)
       rw [show m-1+1 = m by omega]
       exact (Nat.mul_le_mul hTail hLast).trans_eq (Nat.mul_comm _ _)
 
+theorem greedy_small_factor (B L t : ℕ) (hB : 1 ≤ B) (ht : 0 < t) :
+    ∃ u v : ℕ, t = u*v ∧ 0 < u ∧ 0 < v ∧ v ≤ B ∧
+      (∀ p ∈ v.primeFactors, p ≤ L) ∧
+      (u = 1 ∨ L < u.minFac ∨
+        (B < v*u.minFac ∧ ∀ p ∈ v.primeFactors, p ≤ u.minFac)) := by
+  have hAux (u v : ℕ) (hu : 0 < u) (hv : 0 < v) (hvB : v ≤ B)
+      (hSupport : ∀ p ∈ v.primeFactors, p ≤ L)
+      (hSorted : ∀ p ∈ v.primeFactors, u ≠ 1 → p ≤ u.minFac) :
+      ∃ a b : ℕ, u*v = a*b ∧ 0 < a ∧ 0 < b ∧ b ≤ B ∧
+        (∀ p ∈ b.primeFactors, p ≤ L) ∧
+        (a = 1 ∨ L < a.minFac ∨
+          (B < b*a.minFac ∧ ∀ p ∈ b.primeFactors, p ≤ a.minFac)) := by
+    induction u using Nat.strong_induction_on generalizing v with
+    | h u ih =>
+      by_cases hu1 : u = 1
+      · exact ⟨u,v,rfl,hu,hv,hvB,hSupport,Or.inl hu1⟩
+      by_cases hpL : u.minFac ≤ L
+      · by_cases hFit : v*u.minFac ≤ B
+        · let p := u.minFac
+          have hp : p.Prime := Nat.minFac_prime hu1
+          let w := u/p
+          have hd : p ∣ u := Nat.minFac_dvd u
+          have hMul : p*w = u := Nat.mul_div_cancel' hd
+          have hw : 0 < w := Nat.div_pos (Nat.le_of_dvd hu hd) hp.pos
+          have hwlt : w < u := Nat.div_lt_self hu hp.one_lt
+          have hDvd : w ∣ u := ⟨p, by rw [Nat.mul_comm,hMul]⟩
+          have hNextSupport (q : ℕ) (hq : q ∈ (v*p).primeFactors) : q ≤ L := by
+            rw [Nat.primeFactors_mul hv.ne' hp.ne_zero, hp.primeFactors] at hq
+            rcases mem_union.mp hq with h | h
+            · exact hSupport q h
+            · simpa only [mem_singleton.mp h] using hpL
+          have hNextSorted (q : ℕ) (hq : q ∈ (v*p).primeFactors) (hw1 : w ≠ 1) :
+              q ≤ w.minFac := by
+            have hLe : p ≤ w.minFac := Nat.minFac_le_of_dvd (Nat.minFac_prime hw1).ne_one
+              ((Nat.minFac_dvd w).trans hDvd)
+            rw [Nat.primeFactors_mul hv.ne' hp.ne_zero, hp.primeFactors] at hq
+            rcases mem_union.mp hq with h | h
+            · exact (hSorted q h hu1).trans hLe
+            · simpa only [mem_singleton.mp h] using hLe
+          obtain ⟨a,b,hEq,hA,hB',hCap,hSupp,hEnd⟩ :=
+            ih w hwlt (v*p) hw (Nat.mul_pos hv hp.pos) hFit hNextSupport hNextSorted
+          refine ⟨a,b,?_,hA,hB',hCap,hSupp,hEnd⟩
+          calc
+            u*v = (p*w)*v := by rw [hMul]
+            _ = w*(v*p) := by ac_rfl
+            _ = a*b := hEq
+        · exact ⟨u,v,rfl,hu,hv,hvB,hSupport,Or.inr (Or.inr
+            ⟨lt_of_not_ge hFit, fun p hp => hSorted p hp hu1⟩)⟩
+      · exact ⟨u,v,rfl,hu,hv,hvB,hSupport,Or.inr (Or.inl (lt_of_not_ge hpL))⟩
+  simpa only [Nat.mul_one] using hAux t 1 ht (by decide) hB (by simp) (by simp)
+
+def coprimePrefix (q x : ℕ) : Finset ℕ :=
+  (Ioc 0 x).filter fun a => a.Coprime q
+
+lemma coprime_prefix_period_step (q x : ℕ) :
+    (coprimePrefix q (q+x)).card = (coprimePrefix q q).card + (coprimePrefix q x).card := by
+  let A := coprimePrefix q q
+  let B := (coprimePrefix q x).image (q+·)
+  have hUnion : coprimePrefix q (q+x) = A ∪ B := by
+    ext a
+    simp only [A,B,coprimePrefix,mem_union,mem_image,mem_filter,mem_Ioc]
+    constructor
+    · rintro ⟨⟨ha,hax⟩,hCop⟩
+      by_cases hq : a ≤ q
+      · exact Or.inl ⟨⟨ha,hq⟩,hCop⟩
+      · have he : q + (a-q) = a := by omega
+        have h : (q+(a-q)).Coprime q := he.symm ▸ hCop
+        exact Or.inr ⟨a-q,⟨⟨by omega,by omega⟩,Nat.coprime_self_add_left.mp h⟩,he⟩
+    · rintro (⟨⟨ha,hq⟩,hCop⟩ | ⟨t,⟨⟨ht,hx⟩,hCop⟩,rfl⟩)
+      · exact ⟨⟨ha,by omega⟩,hCop⟩
+      · exact ⟨⟨by omega,by omega⟩,Nat.coprime_self_add_left.mpr hCop⟩
+  have hDisjoint : Disjoint A B := by
+    rw [Finset.disjoint_left]
+    intro a ha hb
+    have hA := (mem_Ioc.mp (mem_filter.mp ha).1).2
+    obtain ⟨t,ht,he⟩ := mem_image.mp hb
+    have hT := (mem_Ioc.mp (mem_filter.mp ht).1).1
+    change q+t = a at he
+    omega
+  have hB : B.card = (coprimePrefix q x).card :=
+    card_image_of_injective _ (fun a b h => by change q+a=q+b at h; omega)
+  rw [hUnion, card_union_of_disjoint hDisjoint, hB]
+
+lemma coprime_prefix_periods (q b r : ℕ) :
+    (coprimePrefix q (b*q+r)).card = b*(coprimePrefix q q).card + (coprimePrefix q r).card := by
+  induction b with
+  | zero => simp
+  | succ b ih =>
+    rw [show b.succ*q+r = q+(b*q+r) by rw [Nat.succ_mul]; ac_rfl,
+      coprime_prefix_period_step, ih, Nat.succ_mul]
+    ac_rfl
+
+theorem coprime_prefix_affine (q phi error x : ℕ) (hq : 0 < q)
+    (hFull : (coprimePrefix q q).card = phi)
+    (hRest : ∀ r : Fin q, q*(coprimePrefix q r.val).card ≤ phi*r.val+error) :
+    q*(coprimePrefix q x).card ≤ phi*x+error := by
+  have hId : (x/q)*q+x%q = x := by
+    rw [Nat.mul_comm, Nat.add_comm]
+    exact Nat.mod_add_div _ _
+  have h := coprime_prefix_periods q (x/q) (x%q)
+  rw [hId,hFull] at h
+  have hr := hRest ⟨x%q,Nat.mod_lt _ hq⟩
+  change q*(coprimePrefix q (x%q)).card ≤ phi*(x%q)+error at hr
+  calc
+    _ = q*((x/q)*phi) + q*(coprimePrefix q (x%q)).card := by rw [h, Nat.mul_add]
+    _ ≤ q*((x/q)*phi) + (phi*(x%q)+error) := Nat.add_le_add_left hr _
+    _ = phi*((x/q)*q+x%q)+error := by ring
+    _ = _ := by rw [hId]
+
+private structure FactorCoverRow where
+  prime : ℕ
+  minDiv : ℕ
+  period : ℕ
+  phi : ℕ
+  error : ℕ
+  deriving DecidableEq
+
+private def rightFactors (B L : ℕ) : Finset ℕ :=
+  (Ioc 0 B).filter fun t => ∀ p ∈ t.primeFactors, p ≤ L
+
+private def leftFactorsForRow (row : FactorCoverRow) (x : ℕ) : Finset ℕ :=
+  (coprimePrefix row.period (x/(row.prime*row.minDiv))).image (row.prime*·)
+
+private def rowValid (row : FactorCoverRow) : Prop :=
+  0 < row.prime ∧ 0 < row.minDiv ∧ 0 < row.period ∧
+    (coprimePrefix row.period row.period).card = row.phi ∧
+    ∀ r : Fin row.period, row.period*(coprimePrefix row.period r.val).card ≤ row.phi*r.val+row.error
+
+private instance (row : FactorCoverRow) : Decidable (rowValid row) := by
+  unfold rowValid
+  infer_instance
+
+private def rowDensity (row : FactorCoverRow) : ℚ :=
+  (row.phi : ℚ) / (row.period*row.prime*row.minDiv)
+
+private def rowError (row : FactorCoverRow) : ℚ := (row.error : ℚ) / row.period
+
+private lemma left_factor_mem {row : FactorCoverRow} {x u v : ℕ} (hRow : rowValid row)
+    (hu : 0 < u) (hv : row.minDiv ≤ v) (hSize : u*v ≤ x) (hDvd : row.prime ∣ u)
+    (hCoprime : (u/row.prime).Coprime row.period) : u ∈ leftFactorsForRow row x := by
+  have hP : 0 < row.prime := hRow.1
+  have hMin : 0 < row.minDiv := hRow.2.1
+  have hLe : row.prime ≤ u := Nat.le_of_dvd hu hDvd
+  have hMul := Nat.mul_div_cancel' hDvd
+  have hQuot : u/row.prime ≤ x/(row.prime*row.minDiv) := by
+    apply (Nat.le_div_iff_mul_le (Nat.mul_pos hP hMin)).2
+    calc
+      _ = (row.prime*(u/row.prime))*row.minDiv := by ac_rfl
+      _ = u*row.minDiv := by rw [hMul]
+      _ ≤ u*v := Nat.mul_le_mul_left _ hv
+      _ ≤ x := hSize
+  exact mem_image.mpr ⟨u/row.prime,
+    mem_filter.mpr ⟨mem_Ioc.mpr ⟨Nat.div_pos hLe hP, hQuot⟩,hCoprime⟩, hMul⟩
+
+private lemma left_factor_count (row : FactorCoverRow) (x : ℕ) (hRow : rowValid row) :
+    ((leftFactorsForRow row x).card : ℚ) ≤ rowDensity row * x + rowError row := by
+  obtain ⟨hp,hv,hq,hFull,hRest⟩ := hRow
+  have hCard : (leftFactorsForRow row x).card =
+      (coprimePrefix row.period (x/(row.prime*row.minDiv))).card := by
+    unfold leftFactorsForRow
+    exact card_image_of_injective _ (fun a b h => Nat.mul_left_cancel hp h)
+  rw [hCard]
+  let d := row.prime*row.minDiv
+  have hd : 0 < d := Nat.mul_pos hp hv
+  have hAff := coprime_prefix_affine row.period row.phi row.error (x/d) hq hFull hRest
+  have hAffQ : (row.period : ℚ) * (coprimePrefix row.period (x/d)).card ≤
+      (row.phi : ℚ)*(x/d : ℕ) + row.error := by exact_mod_cast hAff
+  have hDiv : ((x/d : ℕ) : ℚ) ≤ (x : ℚ)/d := by
+    apply (le_div_iff₀ (by exact_mod_cast hd : (0:ℚ)<d)).2
+    exact_mod_cast Nat.div_mul_le_self x d
+  have hBound := hAffQ.trans (add_le_add_right
+    (mul_le_mul_of_nonneg_left hDiv (by positivity : 0 ≤ (row.phi : ℚ))) _)
+  have ht : (row.phi : ℚ)*((x : ℚ)/d) + row.error =
+      (rowDensity row*(x : ℚ) + rowError row) * row.period := by
+    have hperiod : (row.period : ℚ) ≠ 0 := by exact_mod_cast hq.ne'
+    have hprime : (row.prime : ℚ) ≠ 0 := by exact_mod_cast hp.ne'
+    have hmin : (row.minDiv : ℚ) ≠ 0 := by exact_mod_cast hv.ne'
+    unfold rowDensity rowError
+    dsimp [d]
+    field_simp [hperiod, hprime, hmin]
+    <;> ring
+  rw [ht] at hBound
+  have hPos : (0:ℚ) < row.period := by exact_mod_cast hq
+  have hScaled : ((coprimePrefix row.period (x/d)).card : ℚ)*row.period ≤
+      (rowDensity row*(x : ℚ) + rowError row) * row.period := by
+    simpa only [mul_comm (row.period : ℚ)] using hBound
+  exact le_of_mul_le_mul_right hScaled hPos
+
+private lemma graph_density_from_rows (rows : Finset FactorCoverRow)
+    (B L x A C E : ℕ) (S : Finset ℕ) (hB : 1 ≤ B) (hC : 0 < C)
+    (hS : ∀ t ∈ S, 0 < t ∧ t ≤ x)
+    (hSidon : ∀ a ∈ S, ∀ b ∈ S, ∀ c ∈ S, ∀ d ∈ S, a*b = c*d →
+      (a=c ∧ b=d) ∨ (a=d ∧ b=c))
+    (hRows : ∀ row ∈ rows, rowValid row)
+    (hBase : ∃ row ∈ rows, row.prime = 1 ∧ row.minDiv = 1 ∧
+      ∀ p ∈ row.period.primeFactors, p ≤ L)
+    (hNext : ∀ p ∈ (range (L+1)).filter Nat.Prime, ∃ row ∈ rows, row.prime = p ∧
+      (∀ q ∈ row.period.primeFactors, q < p) ∧
+      ∀ v ∈ rightFactors B L, B < v*p → (∀ q ∈ v.primeFactors, q ≤ p) → row.minDiv ≤ v)
+    (hDensity : (∑ row ∈ rows, rowDensity row) ≤ (A:ℚ)/C)
+    (hError : ((rightFactors B L).card.choose 2 : ℚ) +
+      (∑ row ∈ rows, rowError row) ≤ E) :
+    C*S.card ≤ A*x+C*E := by
+  let V := rightFactors B L
+  let U := rows.biUnion (fun row => leftFactorsForRow row x)
+  obtain ⟨base,hbRows,hbP,hbMin,hbFactors⟩ := hBase
+  have hCover : ∀ t ∈ S, ∃ u ∈ U, ∃ v ∈ V, t = u*v := by
+    intro t ht
+    obtain ⟨u,v,he,hu,hv,hvB,hSupport,hEnd⟩ := greedy_small_factor B L t hB (hS t ht).1
+    have hvV : v ∈ V := mem_filter.mpr ⟨mem_Ioc.mpr ⟨hv,hvB⟩,hSupport⟩
+    have hSize : u*v ≤ x := he ▸ (hS t ht).2
+    refine ⟨u, ?_, v,hvV,he⟩
+    rcases hEnd with hu1 | hLarge | ⟨hOver,hSorted⟩
+    · have hCop : (u/base.prime).Coprime base.period := by simp [hu1,hbP]
+      exact mem_biUnion.mpr ⟨base,hbRows,left_factor_mem (hRows base hbRows) hu
+        (by omega) hSize (by simp [hbP]) hCop⟩
+    · have hCop : (u/base.prime).Coprime base.period := by
+        rw [hbP,Nat.div_one]
+        apply Nat.Coprime.symm
+        apply Nat.coprime_of_dvd
+        intro p hp hd huD
+        have hP := hbFactors p (Nat.mem_primeFactors.mpr ⟨hp,hd,(hRows base hbRows).2.2.1.ne'⟩)
+        have hMin := Nat.minFac_le_of_dvd hp.ne_one huD
+        omega
+      exact mem_biUnion.mpr ⟨base,hbRows,left_factor_mem (hRows base hbRows) hu
+        (by omega) hSize (by simp [hbP]) hCop⟩
+    · by_cases hu1 : u = 1
+      · have hCop : (u/base.prime).Coprime base.period := by simp [hu1,hbP]
+        exact mem_biUnion.mpr ⟨base,hbRows,left_factor_mem (hRows base hbRows) hu
+          (by omega) hSize (by simp [hbP]) hCop⟩
+      · let p := u.minFac
+        have hp : p.Prime := Nat.minFac_prime hu1
+        by_cases hPL : L < p
+        · have hCop : (u/base.prime).Coprime base.period := by
+            rw [hbP,Nat.div_one]
+            apply Nat.Coprime.symm
+            apply Nat.coprime_of_dvd
+            intro r hr hd huD
+            have hP := hbFactors r (Nat.mem_primeFactors.mpr ⟨hr,hd,(hRows base hbRows).2.2.1.ne'⟩)
+            have hMin : p ≤ r := Nat.minFac_le_of_dvd hr.ne_one huD
+            omega
+          exact mem_biUnion.mpr ⟨base,hbRows,left_factor_mem (hRows base hbRows) hu
+            (by omega) hSize (by simp [hbP]) hCop⟩
+        · obtain ⟨row,hrRows,hrP,hrFactors,hrMin⟩ := hNext p
+            (mem_filter.mpr ⟨mem_range.mpr (by omega),hp⟩)
+          have hPDvd : row.prime ∣ u := by rw [hrP]; exact Nat.minFac_dvd u
+          have hCop : (u/row.prime).Coprime row.period := by
+            apply Nat.Coprime.symm
+            apply Nat.coprime_of_dvd
+            intro r hr hd hrU
+            have hP := hrFactors r (Nat.mem_primeFactors.mpr ⟨hr,hd,(hRows row hrRows).2.2.1.ne'⟩)
+            have hMin : p ≤ r := Nat.minFac_le_of_dvd hr.ne_one (hrU.trans (Nat.div_dvd_of_dvd hPDvd))
+            omega
+          exact mem_biUnion.mpr ⟨row,hrRows,left_factor_mem (hRows row hrRows) hu
+            (hrMin v hvV hOver hSorted) hSize hPDvd hCop⟩
+  have hGraph := factor_cover_card_of_distinct_products S U V hCover hSidon
+  have hCards : U.card ≤ ∑ row ∈ rows, (leftFactorsForRow row x).card := card_biUnion_le
+  have hCombined : (S.card : ℚ) ≤
+      (∑ row ∈ rows, rowDensity row)*x + ((V.card.choose 2 : ℚ) + ∑ row ∈ rows, rowError row) := by
+    calc
+      _ ≤ (U.card : ℚ)+V.card.choose 2 := by exact_mod_cast hGraph
+      _ ≤ (∑ row ∈ rows, ((leftFactorsForRow row x).card : ℚ)) + V.card.choose 2 := by
+        exact_mod_cast Nat.add_le_add_right hCards (V.card.choose 2)
+      _ ≤ (∑ row ∈ rows, rowDensity row*x+rowError row)+V.card.choose 2 :=
+        add_le_add_right (sum_le_sum (fun row hrow => left_factor_count row x (hRows row hrow))) _
+      _ = _ := by rw [Finset.sum_add_distrib, Finset.sum_mul]; ac_rfl
+  have hAll := hCombined.trans (add_le_add
+    (mul_le_mul_of_nonneg_right hDensity (by positivity : 0 ≤ (x:ℚ))) hError)
+  have hCQ : (0:ℚ) < C := by exact_mod_cast hC
+  have hMul := mul_le_mul_of_nonneg_left hAll hCQ.le
+  have hId : (C:ℚ)*((A:ℚ)/C*x+E) = (A:ℚ)*x+(C:ℚ)*E := by
+    field_simp [hCQ.ne']
+  rw [hId] at hMul
+  exact_mod_cast hMul
+
+private def rows36 : Finset FactorCoverRow :=
+  {⟨1,1,210,48,318⟩,⟨2,32,1,1,0⟩,⟨3,16,2,1,1⟩,⟨5,8,6,2,4⟩,⟨7,6,30,8,28⟩}
+
+private def rows100 : Finset FactorCoverRow :=
+  {⟨1,1,2310,480,5820⟩,⟨2,64,1,1,0⟩,⟨3,36,2,1,1⟩,⟨5,24,6,2,4⟩,⟨7,15,30,8,28⟩,
+    ⟨11,10,210,48,318⟩}
+
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+private lemma rows36_valid : ∀ row ∈ rows36, rowValid row := by decide
+
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+private lemma rows100_valid : ∀ row ∈ rows100, rowValid row := by decide
+
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem distinct_products_rank_bounds (S : Finset ℕ) (x : ℕ)
+    (hS : ∀ t ∈ S, 0 < t ∧ t ≤ x)
+    (hSidon : ∀ a ∈ S, ∀ b ∈ S, ∀ c ∈ S, ∀ d ∈ S, a*b = c*d →
+      (a=c ∧ b=d) ∨ (a=d ∧ b=c)) :
+    1260*S.card ≤ 353*x+1260*304 ∧ 21701*S.card ≤ 5000*x+21701*1492 := by
+  exact ⟨graph_density_from_rows rows36 36 7 x 353 1260 304 S (by decide) (by decide)
+      hS hSidon rows36_valid (by decide) (by decide) (by decide) (by decide),
+    graph_density_from_rows rows100 100 11 x 5000 21701 1492 S (by decide) (by decide)
+      hS hSidon rows100_valid (by decide) (by decide) (by decide) (by decide)⟩
+
+def coefficientRankLower (i : ℕ) : ℕ :=
+  max i (max ((1260*(i-304)+352)/353) ((21701*(i-1492)+4999)/5000))
+
+theorem distinct_products_product_lower (S : Finset ℕ)
+    (hPos : 0 ∉ S)
+    (hSidon : ∀ a ∈ S, ∀ b ∈ S, ∀ c ∈ S, ∀ d ∈ S, a*b = c*d →
+      (a=c ∧ b=d) ∨ (a=d ∧ b=c)) :
+    (∏ i ∈ range S.card, coefficientRankLower (i+1)) ≤ ∏ t ∈ S, t := by
+  apply product_lower_bound_from_maxima S coefficientRankLower
+  intro T hT z hz hZ
+  have hData : ∀ t ∈ T, 0 < t ∧ t ≤ z := by
+    intro t ht
+    exact ⟨Nat.pos_of_ne_zero (fun h => hPos (h ▸ hT ht)),hZ t ht⟩
+  have hRank := distinct_products_rank_bounds T z hData
+    (fun a ha b hb c hc d hd h => hSidon a (hT ha) b (hT hb) c (hT hc) d (hT hd) h)
+  have hTrivial : T.card ≤ z :=
+    (card_le_card (show T ⊆ Ioc 0 z from fun t ht => mem_Ioc.mpr (hData t ht))).trans
+      (by simp)
+  have hFirst := hRank.1
+  have hSecond := hRank.2
+  unfold coefficientRankLower
+  exact max_le hTrivial (max_le (by omega) (by omega))
+
 theorem odd_branch_of_coefficient_product_bound {n k l : ℕ} (hk : 3 ≤ k) (hl : 3 ≤ l)
     (hSylvester : ∃ p : ℕ, p.Prime ∧ k < p ∧ p ∣ ∏ t ∈ Ioc n (n+k), t)
     (hLower : ∀ A : Finset ℕ, 0 ∉ A → k - ((range k).filter Nat.Prime).card ≤ A.card →
@@ -968,6 +1293,23 @@ theorem odd_branch_of_coefficient_product_bound {n k l : ℕ} (hk : 3 ≤ k) (hl
   have hLarge := hLower (S.image b) hZero hCountImage hSidon
   rw [Finset.prod_image hInj] at hLarge
   exact (not_lt_of_ge (Nat.le_of_dvd (Nat.factorial_pos _) hProduct)) hLarge
+
+def rankProductCertificate (k : ℕ) : Prop :=
+  (k-1).factorial <
+    ∏ i ∈ range (k-((range k).filter Nat.Prime).card), coefficientRankLower (i+1)
+
+theorem odd_branch_from_rank_certificate {n k l : ℕ}
+    (hk : 3 ≤ k) (hl : 3 ≤ l)
+    (hSylvester : ∃ p : ℕ, p.Prime ∧ k < p ∧ p ∣ ∏ t ∈ Ioc n (n+k), t)
+    (hNumeric : rankProductCertificate k) :
+    ∃ p : ℕ, k ≤ p ∧ p.Prime ∧ ¬ l ∣ (∏ t ∈ Ioc n (n+k), t).factorization p := by
+  apply odd_branch_of_coefficient_product_bound hk hl hSylvester
+  intro S hPos hCard hSidon
+  have hMono := Finset.prod_le_prod_of_subset_of_one_le' (Finset.range_mono hCard)
+    (f := fun i => coefficientRankLower (i+1)) (by
+      intro i _ _
+      exact (Nat.succ_pos i).trans_le (le_max_left _ _))
+  exact hNumeric.trans_le (hMono.trans (distinct_products_product_lower S hPos hSidon))
 
 end Erdos137PerfectPower
 
