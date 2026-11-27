@@ -329,7 +329,7 @@ lemma prod_Ioc_zero_eq_factorial (m : ℕ) : (∏ d ∈ Ioc 0 m, d) = m.factoria
     rw [hSet, Finset.prod_insert (by simp), ih, Nat.factorial_succ]
 
 lemma interval_distances_dvd_factorial {n k m : ℕ} (hm : m ∈ Ioc n (n + k)) :
-    (∏ t ∈ (Ioc n (n + k)).erase m, (m - t) + (t - m)) ∣ (k - 1).factorial := by
+    (∏ t ∈ (Ioc n (n + k)).erase m, ((m - t) + (t - m))) ∣ (k - 1).factorial := by
   have hmB := mem_Ioc.mp hm
   have hSplit : (Ioc n (n + k)).erase m = Ioo n m ∪ Ioc m (n + k) := by
     ext t
@@ -339,7 +339,7 @@ lemma interval_distances_dvd_factorial {n k m : ℕ} (hm : m ∈ Ioc n (n + k)) 
     rw [Finset.disjoint_left]
     intro t hl hr
     exact (not_lt_of_ge (mem_Ioo.mp hl).2.le) (mem_Ioc.mp hr).1
-  have hLeft : (∏ t ∈ Ioo n m, (m-t)+(t-m)) = (m-n-1).factorial := by
+  have hLeft : (∏ t ∈ Ioo n m, ((m-t)+(t-m))) = (m-n-1).factorial := by
     have hi : Set.InjOn (fun t : ℕ => m-t) ↑(Ioo n m) := by
       intro s hs t ht he
       have hS := mem_Ioo.mp hs
@@ -359,9 +359,9 @@ lemma interval_distances_dvd_factorial {n k m : ℕ} (hm : m ∈ Ioc n (n + k)) 
         refine Finset.prod_congr rfl (fun t ht => ?_)
         have := (mem_Ioo.mp ht).2
         omega
-      _ = ∏ d ∈ (Ioo n m).image (fun t => m-t), d := (Finset.prod_image hi).symm
+      _ = ∏ d ∈ (Ioo n m).image (fun t => m-t), d := by rw [Finset.prod_image hi]
       _ = _ := by rw [hImage, prod_Ioc_zero_eq_factorial]
-  have hRight : (∏ t ∈ Ioc m (n+k), (m-t)+(t-m)) = (n+k-m).factorial := by
+  have hRight : (∏ t ∈ Ioc m (n+k), ((m-t)+(t-m))) = (n+k-m).factorial := by
     have hi : Set.InjOn (fun t : ℕ => t-m) ↑(Ioc m (n+k)) := by
       intro s hs t ht he
       have hS := mem_Ioc.mp hs
@@ -381,7 +381,7 @@ lemma interval_distances_dvd_factorial {n k m : ℕ} (hm : m ∈ Ioc n (n + k)) 
         refine Finset.prod_congr rfl (fun t ht => ?_)
         have := (mem_Ioc.mp ht).1
         omega
-      _ = ∏ d ∈ (Ioc m (n+k)).image (fun t => t-m), d := (Finset.prod_image hi).symm
+      _ = ∏ d ∈ (Ioc m (n+k)).image (fun t => t-m), d := by rw [Finset.prod_image hi]
       _ = _ := by rw [hImage, prod_Ioc_zero_eq_factorial]
   rw [hSplit, Finset.prod_union hDisj, hLeft, hRight,
     show k-1 = (m-n-1)+(n+k-m) by omega]
@@ -412,7 +412,9 @@ theorem restricted_prod_dvd_factorial :
     change S.card + removed.card = R.card at h
     simpa [R] using h
   have hPrimeCard : removed.card ≤ P.card := Finset.card_image_le
-  refine ⟨S, hSub, by omega, ?_⟩
+  refine ⟨S, hSub, ?_, ?_⟩
+  · change k - P.card ≤ S.card
+    omega
   have hPos (t : ℕ) (ht : t ∈ R) : t ≠ 0 := by
     have h := (mem_Ioc.mp ht).1
     omega
