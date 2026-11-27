@@ -317,9 +317,8 @@ private lemma base_numerator_upper (r : ℕ) (hr : r < 30) :
     (pow_le_pow_left' (by omega : 5000+r ≤ 5029) r)
   have h2 := (factorial_run_upper 166 d).trans (pow_le_pow_left' hd' d)
   unfold factorialNumerator baseTop
-  change (5000+r).factorial*((5000+r)/30).factorial ≤
-    (5000:ℕ).factorial * (166:ℕ).factorial * (5029^r * 167^d)
-  rw [hd, factorial_extend 5000 r, factorial_extend 166 d]
+  rw [show (5000:ℕ)/30 = 166 by decide]
+  conv_lhs => rw [hd, factorial_extend 5000 r, factorial_extend 166 d]
   calc
     _ = ((5000:ℕ).factorial*(166:ℕ).factorial)*(factorialRun 5000 r*factorialRun 166 d) := group_four _ _ _ _
     _ ≤ _ := Nat.mul_le_mul_left _ (Nat.mul_le_mul h1 h2)
@@ -335,9 +334,9 @@ private lemma base_denominator_lower (r : ℕ) :
   have h₃ : (5000+r)/3 = 1666+d₃ := by dsimp [d₃]; omega
   have h₅ : (5000+r)/5 = 1000+d₅ := by dsimp [d₅]; omega
   unfold factorialDenominator baseBottom
-  change (((2500:ℕ).factorial*(1666:ℕ).factorial)*(1000:ℕ).factorial)*(2501^d₂*1667^d₃*1001^d₅) ≤
-    ((5000+r)/2).factorial*((5000+r)/3).factorial*((5000+r)/5).factorial
-  rw [h₂, h₃, h₅, factorial_extend 2500 d₂, factorial_extend 1666 d₃, factorial_extend 1000 d₅]
+  rw [show (5000:ℕ)/2 = 2500 by decide, show (5000:ℕ)/3 = 1666 by decide,
+    show (5000:ℕ)/5 = 1000 by decide]
+  conv_rhs => rw [h₂, h₃, h₅, factorial_extend 2500 d₂, factorial_extend 1666 d₃, factorial_extend 1000 d₅]
   calc
     _ ≤ (((2500:ℕ).factorial*(1666:ℕ).factorial)*(1000:ℕ).factorial)*(factorialRun 2500 d₂*factorialRun 1666 d₃*factorialRun 1000 d₅) :=
       Nat.mul_le_mul_left _ (Nat.mul_le_mul (Nat.mul_le_mul (factorial_run_lower 2500 d₂)
