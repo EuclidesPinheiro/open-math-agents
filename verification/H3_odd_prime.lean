@@ -258,6 +258,30 @@ lemma two_power_remainders {l A B : ℕ} (hl : l ≠ 0)
     · rw [Nat.factorization_eq_zero_of_not_prime _ hp, Nat.factorization_eq_zero_of_not_prime _ hp]
   exact ⟨a, x, y, ha, hA, hab.symm ▸ hB⟩
 
+theorem normalize_odd_coefficients {n k l : ℕ} (hl : l ≠ 0)
+    (hAll : ∀ p : ℕ, k ≤ p → p.Prime →
+      l ∣ (∏ t ∈ Ioc n (n+k), t).factorization p) :
+    ∃ a x : ℕ → ℕ,
+      (∀ i ∈ Icc 1 k, a i ≠ 0) ∧
+      (∀ i ∈ Icc 1 k, n+i = a i * x i ^ l) ∧
+      (∀ i ∈ Icc 1 k, ∀ p ∈ (a i).primeFactors, p < k) ∧
+      (∀ i ∈ Icc 1 k, ∀ p : ℕ, (a i).factorization p = (n+i).factorization p % l) := by
+  choose a x ha hRepr hFac using fun i : ℕ => power_remainders l (n+i) hl
+  refine ⟨a, x, fun i _ => ha i, fun i _ => hRepr i, ?_, fun i _ => hFac i⟩
+  intro i hi p hp
+  have hiB := mem_Icc.mp hi
+  have ht : n+i ∈ Ioc n (n+k) := mem_Ioc.mpr ⟨by omega, by omega⟩
+  obtain ⟨hpPrime, hpDvd, _⟩ := Nat.mem_primeFactors.mp hp
+  by_contra! hpK
+  have hpT : p ∣ n+i := by
+    rw [hRepr i]
+    exact hpDvd.trans (dvd_mul_right _ _)
+  have hDiv := hAll p hpK hpPrime
+  rw [large_prime_factorization_single hpK ht hpT] at hDiv
+  have hPos := hpPrime.factorization_pos_of_dvd (ha i) hpDvd
+  rw [hFac i, Nat.mod_eq_zero_of_dvd hDiv] at hPos
+  exact (Nat.lt_irrefl 0) hPos
+
 lemma scaled_power_eq_of_in_pair_interval {n k l A B : ℕ}
     (hk : 0 < k) (hn : k ^ l < n) (hl : 3 ≤ l)
     (hA : n ^ 2 ≤ A ∧ A ≤ (n + k) ^ 2) (hB : n ^ 2 ≤ B ∧ B ≤ (n + k) ^ 2)
@@ -375,7 +399,7 @@ lemma block_multiset_prod_injective {n k l : ℕ} (hk : 0 < k) (hn : k^l < n)
     have hiPos : 0 < n+i := by have := (mem_Icc.mp hi).1; omega
     have hiT : i ∈ t := by
       by_contra hAbsent
-      have hG := gcd_block_multiset_product_le hi t ht hAbsent
+      have hG := gcd_block_multiset_product_le (n := n) hi t ht hAbsent
       have hD : n+i ∣ (t.map (n+·)).prod := by
         rw [← heq, Multiset.map_cons, Multiset.prod_cons]
         exact dvd_mul_right _ _
@@ -479,6 +503,97 @@ theorem distinct_pair_products_mod_l {n k l : ℕ} {a x : ℕ → ℕ}
   rw [hFac i j (mem_Icc.mpr ⟨hi, hij.trans hj⟩) (mem_Icc.mpr ⟨hi.trans hij, hj⟩),
     hFac u v (mem_Icc.mpr ⟨hu, huv.trans hv⟩) (mem_Icc.mpr ⟨hu.trans huv, hv⟩)]
   exact heq p hp
+
+lemma coefficient_with_only_two {a : ℕ} (ha : a ≠ 0)
+    (hSupport : ∀ p ∈ a.primeFactors, p < 3) : a = 2 ^ a.factorization 2 := by
+  apply Nat.eq_of_factorization_eq ha (pow_ne_zero _ (by decide))
+  intro p
+  have ht : Nat.Prime 2 := by decide
+  rw [ht.factorization_pow, Finsupp.single_apply]
+  by_cases hTwo : p = 2
+  · subst p
+    simp
+  · rw [if_neg (Ne.symm hTwo)]
+    by_cases hP : p.Prime
+    · apply Nat.factorization_eq_zero_of_not_dvd
+      intro hDvd
+      have hSmall := hSupport p (Nat.mem_primeFactors.mpr ⟨hP, hDvd, ha⟩)
+      have hLarge := hP.two_le
+      omega
+    · exact Nat.factorization_eq_zero_of_not_prime _ hP
+
+theorem three_odd_exponent_of_sylvester {n l : ℕ} (hl : 3 ≤ l)
+    (hSylvester : ∃ p : ℕ, p.Prime ∧ 3 < p ∧ p ∣ ∏ t ∈ Ioc n (n+3), t) :
+    ∃ p : ℕ, 3 ≤ p ∧ p.Prime ∧ ¬ l ∣ (∏ t ∈ Ioc n (n+3), t).factorization p := by
+  by_contra! hAll
+  obtain ⟨hN, hTop⟩ := sylvester_schur_power_bounds_of_no_witness (by omega) hSylvester hAll
+  obtain ⟨a, x, ha, hRepr, hSupport, hFac⟩ := normalize_odd_coefficients (by omega) hAll
+  have hData (i : ℕ) (hi : i ∈ Icc 1 3) :
+      a i = 2 ^ ((n+i).factorization 2 % l) := by
+    have h := coefficient_with_only_two (ha i hi) (hSupport i hi)
+    rw [hFac i hi 2] at h
+    exact h
+  have hOne (i : ℕ) (hi : i ∈ Icc 1 3) (hiOdd : ¬ 2 ∣ n+i) : a i = 1 := by
+    rw [hData i hi, Nat.factorization_eq_zero_of_not_dvd hiOdd, Nat.zero_mod, pow_zero]
+  have hTwo (i : ℕ) (hi : i ∈ Icc 1 3) (hiEven : 2 ∣ n+i) (hiNotFour : ¬ 4 ∣ n+i) :
+      a i = 2 := by
+    have hp : Nat.Prime 2 := by decide
+    have hNZ : n+i ≠ 0 := by have := (mem_Icc.mp hi).1; omega
+    have hLo := hp.factorization_pos_of_dvd hNZ hiEven
+    have hHi : ¬ 2 ≤ (n+i).factorization 2 := by
+      intro hGe
+      exact hiNotFour ((hp.pow_dvd_iff_le_factorization hNZ).2 hGe)
+    rw [hData i hi, show (n+i).factorization 2 = 1 by omega, Nat.mod_eq_of_lt (by omega), pow_one]
+  have hSingle (i j : ℕ) (hi : i ∈ Icc 1 3) (hj : j ∈ Icc 1 3)
+      (hEq : a i = a j) : i = j := by
+    have h := distinct_multiset_products_mod_l (by decide : 0 < 3) hN (by omega) hTop hRepr
+      ({i} : Multiset ℕ) ({j} : Multiset ℕ)
+      (by intro r hr; simpa only [Multiset.mem_singleton.mp hr] using hi)
+      (by intro r hr; simpa only [Multiset.mem_singleton.mp hr] using hj)
+      (by simp) (by simpa only [Multiset.card_singleton] using (show 1 < l by omega))
+      (by simp [hEq])
+    simpa using h
+  have hCollision (u v w : ℕ) (hu : u ∈ Icc 1 3) (hv : v ∈ Icc 1 3) (hw : w ∈ Icc 1 3)
+      (hwu : w ≠ u) (hwv : w ≠ v) (hu1 : a u = 1) (hv2 : a v = 2) : False := by
+    let e := (n+w).factorization 2 % l
+    have he : e < l := Nat.mod_lt _ (by omega)
+    have hw2 : a w = 2 ^ e := hData w hw
+    by_cases he0 : e = 0
+    · apply hwu (hSingle w u hw hu ?_)
+      rw [hw2, he0, pow_zero, hu1]
+    let S : Multiset ℕ := w ::ₘ Multiset.replicate (e-1) u
+    let T : Multiset ℕ := Multiset.replicate e v
+    have hCardS : S.card = e := by
+      simp only [S, Multiset.card_cons, Multiset.card_replicate]
+      omega
+    have hCardT : T.card = e := Multiset.card_replicate _ _
+    have hS (i : ℕ) (hi : i ∈ S) : i ∈ Icc 1 3 := by
+      rcases Multiset.mem_cons.mp hi with rfl | h
+      · exact hw
+      · have heq := Multiset.eq_of_mem_replicate h
+        simpa only [heq] using hu
+    have hT (i : ℕ) (hi : i ∈ T) : i ∈ Icc 1 3 := by
+      have heq := Multiset.eq_of_mem_replicate hi
+      simpa only [heq] using hv
+    have hPr : (S.map a).prod = (T.map a).prod := by
+      simp [S, T, hu1, hv2, hw2]
+    have hEq := distinct_multiset_products_mod_l (by decide : 0 < 3) hN (by omega) hTop hRepr
+      S T hS hT (hCardS.trans hCardT.symm) (by rwa [hCardS]) (by intro p hp; rw [hPr])
+    have hwT : w ∈ T := hEq ▸ Multiset.mem_cons_self _ _
+    exact hwv (Multiset.eq_of_mem_replicate hwT)
+  have h1 : 1 ∈ Icc (1 : ℕ) 3 := by decide
+  have h2 : 2 ∈ Icc (1 : ℕ) 3 := by decide
+  have h3 : 3 ∈ Icc (1 : ℕ) 3 := by decide
+  rcases (show n % 4 = 0 ∨ n % 4 = 1 ∨ n % 4 = 2 ∨ n % 4 = 3 by omega)
+    with h0 | hM | hE | hM
+  · have hEq := hSingle 1 3 h1 h3 ((hOne 1 h1 (by omega)).trans (hOne 3 h3 (by omega)).symm)
+    omega
+  · exact hCollision 2 1 3 h2 h1 h3 (by decide) (by decide)
+      (hOne 2 h2 (by omega)) (hTwo 1 h1 (by omega) (by omega))
+  · have hEq := hSingle 1 3 h1 h3 ((hOne 1 h1 (by omega)).trans (hOne 3 h3 (by omega)).symm)
+    omega
+  · exact hCollision 2 3 1 h2 h3 h1 (by decide) (by decide)
+      (hOne 2 h2 (by omega)) (hTwo 3 h3 (by omega) (by omega))
 
 lemma factorization_le_of_dvd_difference {p i j : ℕ} (hp : p.Prime)
     (hi : i ≠ 0) (hij : i < j) (hMax : i.factorization p ≤ j.factorization p) :
