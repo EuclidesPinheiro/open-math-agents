@@ -52,4 +52,7 @@ jobs:
         shell: bash
         run: |
           cd formal-conjectures
-          timeout 600 lake env lean ../verification/H3_odd_tail.lean
+          timeout 600 lake env lean ../verification/H3_odd_tail.lean &
+          tail_check=$!
+          timeout 600 lake env lean ../verification/H3_odd_bridge.lean
+          wait "$tail_check"

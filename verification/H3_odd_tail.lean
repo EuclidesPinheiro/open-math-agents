@@ -17,6 +17,7 @@ lemma rank_scaled (i : ℕ) : 21701*(i-1492) ≤ 5000*rankBound i := by
     (le_max_right _ _).trans (le_max_right _ _)
   omega
 
+set_option maxRecDepth 10000 in
 lemma rank_factorial_product (r : ℕ) (hr : 1492 ≤ r) :
     21701^(r-1492) * (r-1492).factorial ≤
       5000^(r-1492) * ∏ i ∈ range r, rankBound (i+1) := by
@@ -64,7 +65,7 @@ lemma tail_rank_contradiction (k P : ℕ) (hk : 2^21 ≤ k) (hP : P ≤ k)
   have hStrict : (k:ℚ)^(P+1492) < (21701/5000 : ℚ)^d := by
     apply lt_of_pow_lt_pow_left₀ 120 (by positivity)
     calc
-      ((k:ℚ)^(P+1492))^120 = (((k:ℚ)^(P+1492))^12)^10 := by rw [← pow_mul]
+      ((k:ℚ)^(P+1492))^120 = (((k:ℚ)^(P+1492))^12)^10 := by simp only [← pow_mul]; rfl
       _ ≤ ((2:ℚ)^(23*k))^10 := pow_le_pow_left₀ (by positivity) hPowerQ _
       _ = ((2:ℚ)^230)^k := by rw [← pow_mul, ← pow_mul]; congr 1; omega
       _ < ((21701/5000 : ℚ)^109)^k := pow_lt_pow_left₀ hStep (by positivity) (by omega)
@@ -154,6 +155,7 @@ lemma sum_dyadic_div_le (k e : ℕ) : (∑ j ∈ range e, k/2^j) ≤ 2*k := by
 lemma dyadic_exponential_absorption (C : ℕ) (hC : C*22 ≤ 2^21) (e : ℕ) (he : 21 ≤ e) :
     C*(e+1) ≤ 2^e := by
   obtain ⟨d, rfl⟩ := Nat.exists_eq_add_of_le he
+  clear he
   induction d with
   | zero => exact hC
   | succ d ih =>
@@ -161,6 +163,7 @@ lemma dyadic_exponential_absorption (C : ℕ) (hC : C*22 ≤ 2^21) (e : ℕ) (he
     rw [show 21+d.succ = (21+d)+1 by omega,pow_succ]
     exact hStep.trans (by simpa only [mul_comm] using Nat.mul_le_mul_left 2 ih)
 
+set_option maxRecDepth 10000 in
 lemma tail_from_prime_estimates (k : ℕ) (hk : 2^21 ≤ k)
     (hPrimorial : ∀ n : ℕ, (primorial n)^8 ≤ 2^(13*n))
     (hPrimeCount : ∀ n : ℕ, 128*n.primesLE.card ≤ 13*n+128*6542) :
@@ -185,13 +188,14 @@ lemma tail_from_prime_estimates (k : ℕ) (hk : 2^21 ≤ k)
       _ = ∑ j ∈ range (e+1), 128*(k/2^j).primesLE.card := by rw [mul_sum]
       _ ≤ ∑ j ∈ range (e+1), (13*(k/2^j)+128*6542) := sum_le_sum (fun j _ => hPrimeCount _)
       _ = 13*(∑ j ∈ range (e+1), k/2^j)+128*6542*(e+1) := by
-        rw [sum_add_distrib, ← mul_sum, sum_const, card_range, nsmul_eq_mul, Nat.mul_comm (e+1)]
+        rw [sum_add_distrib, ← mul_sum, sum_const, card_range, nsmul_eq_mul]
+        ac_rfl
       _ ≤ _ := by have := sum_dyadic_div_le k (e+1); omega
   have hKProd : k^P ≤ 2^w*primorial (k-1) := by
     rw [primorial_eq_prod_primesLE, show 2^w = ∏ p ∈ (k-1).primesLE, 2^(dyadicHeight k p) by
       exact (Finset.prod_pow_eq_pow_sum _ _ _).symm, ← Finset.prod_mul_distrib]
     calc
-      _ = ∏ _ ∈ (k-1).primesLE, k := by rw [prod_const, hProd]; rfl
+      _ = ∏ _ ∈ (k-1).primesLE, k := by rw [prod_const, hProd]
       _ ≤ _ := prod_le_prod' fun p hp => le_dyadic_height k p (mem_filter.mp hp).2.pos
   have hK8 : (k^P)^8 ≤ 2^(8*w+13*k) := by
     calc
