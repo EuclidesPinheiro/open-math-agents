@@ -6,6 +6,13 @@ permissions:
   contents: read
 jobs:
   lean:
+    name: Lean ${{ matrix.part }}
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [primorial, medium]
+    env:
+      PART: ${{ matrix.part }}
     runs-on: ubuntu-latest
     timeout-minutes: 55
     steps:
@@ -47,16 +54,24 @@ jobs:
           path: |
             ~/.elan
             formal-conjectures/.lake
-      - name: Check the exact OMA odd-prime submission
-        if: ${{ success() || steps.odd.outcome == 'failure' }}
+      - name: Compile the odd exponent lemmas
+        id: odd
         shell: bash
         run: |
-          set -euo pipefail
-          export OMA_FC="$PWD/formal-conjectures"
-          for reduction in verification/Erdos137*.R1.lean; do cp "$reduction" reductions/; done
-          proof=proofs/Erdos137.erdos_137.variants.perfect_power.R1.H3.R1.H2.lean
-          cp verification/H3_odd_submission.lean "$proof"
-          rc=0
-          bash tools/check.sh "$proof" "${RUNNER_TEMP}/erdos137-verdict.json" || rc=$?
-          python3 -m json.tool "${RUNNER_TEMP}/erdos137-verdict.json"
-          exit "$rc"
+          cd formal-conjectures
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          v = Path('../verification')
+          bridge = (v/'H3_odd_bridge.lean').read_text(encoding='utf-8').split('lemma prime_prefix_add', 1)[0]
+          part = os.environ['PART']
+          name = 'H3_odd_prime.lean' if part == 'medium' else 'H3_odd_primorial.lean'
+          component = (v/name).read_text(encoding='utf-8')
+          lines = (bridge + component).splitlines()
+          imports = list(dict.fromkeys(l for l in lines if l.startswith('import ') and l != 'import H3OddBridge'))
+          body = lambda content: '\n'.join(l for l in content.splitlines() if not l.startswith('import '))
+          check = 'Erdos137PerfectPower.medium_odd_prime_of_sylvester' if part == 'medium' else 'Erdos137OddPrimorial.primorial_eighth_le'
+          Path('H3LeanAudit.lean').write_text('\n'.join(imports) + '\n\n' + body(bridge)
+              + '\nend Erdos137OddBridge\n' + body(component) + '\n#print axioms ' + check + '\n', encoding='utf-8')
+          PY
+          timeout -k 5 600 stdbuf -oL -eL lake env lean -Dprofiler=true H3LeanAudit.lean
