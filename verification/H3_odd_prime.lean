@@ -1161,7 +1161,7 @@ theorem tagged_multiset_residue_bound {n k l d : ℕ} {a x : ℕ → ℕ} (S P Q
   let coeff := fun i : S => a i.val
   let tagged := fun i : S => tag i.val
   let collect := fun s : Sym S d => (⟨s.val.map tagged, by simpa using s.property⟩ : Sym (Option Q) d)
-  let code := fun s : Sym S d =>
+  let code : Sym S d → ((P → ZMod l) × Sym (Option Q) d) := fun s =>
     ((fun p : P => ((s.val.map coeff).prod.factorization p : ZMod l)), collect s)
   have hFac (s : Sym S d) (p : ℕ) (hp : p.Prime) (hpP : p ∉ P) :
       (s.val.map coeff).prod.factorization p = ((collect s).val.map (optionalPrimeVal p)).sum := by
@@ -1199,7 +1199,7 @@ theorem middle_coefficient_tag {a : ℕ} (P Q : Finset ℕ) (ha : a ≠ 0)
     intro p hp hpP
     by_cases he : q = p
     · subst p
-      simp only [optionalPrimeVal, if_pos rfl]
+      simp only [optionalPrimeVal, if_true]
       have hq := hPrime q hqQ
       have hLo := hq.factorization_pos_of_dvd ha hd
       have hHi : ¬ 2 ≤ a.factorization q := by
@@ -1211,8 +1211,8 @@ theorem middle_coefficient_tag {a : ℕ} (P Q : Finset ℕ) (ha : a ≠ 0)
       apply Nat.factorization_eq_zero_of_not_dvd
       intro hpA
       have hpQ := (mem_union.mp (hSupport (Nat.mem_primeFactors.mpr ⟨hp,hpA,ha⟩))).resolve_left hpP
-      exact hAvoid q hqQ p hpQ
-        ((Nat.coprime_primes (hPrime q hqQ) hp).2 he).mul_dvd_of_dvd_of_dvd hd hpA
+      have hCop := (Nat.coprime_primes (hPrime q hqQ) hp).2 he
+      exact hAvoid q hqQ p hpQ (hCop.mul_dvd_of_dvd_of_dvd hd hpA)
   · refine ⟨none, ?_⟩
     intro p hp hpP
     apply Nat.factorization_eq_zero_of_not_dvd
@@ -1309,25 +1309,29 @@ lemma tagged_count_growth_step {q m f r : ℕ} (hq : 5 ≤ q) (hfr : r+1 ≤ f)
     have h := congrArg (fun z : ℕ => (r+5)*z) hd₅
     change (r+5)*(consecutivePowerDifference 5 m + 5^m) = (r+5)*6^m at h
     rw [Nat.mul_add] at h
-    rw [show f+4 = (f-r-1)+(r+5) by omega, Nat.add_mul] at hBase
+    rw [show f+4 = (f-r-1)+(r+5) by omega, Nat.add_mul (f-r-1) (r+5) (5^m)] at hBase
     omega
   have hCompare : 5*(r+q) ≤ q*(r+5) := by
     have h := Nat.mul_le_mul_left r hq
     nlinarith only [h]
   have hDiff : (r+q)*consecutivePowerDifference q m ≤ (f-r-1)*q^m := by
-    apply Nat.le_of_mul_le_mul_left _ (Nat.mul_pos (pow_pos (by decide : 0 < (5:ℕ)) m) (by omega))
-    calc
-      _ = (r+q)*(5^m*q*consecutivePowerDifference q m) := by ring
-      _ ≤ (r+q)*(q^m*5*consecutivePowerDifference 5 m) :=
-        Nat.mul_le_mul_left _ (consecutive_power_difference_scale hq m)
-      _ = (5*(r+q))*(q^m*consecutivePowerDifference 5 m) := by ring
-      _ ≤ (q*(r+5))*(q^m*consecutivePowerDifference 5 m) := Nat.mul_le_mul_right _ hCompare
-      _ = (q*q^m)*((r+5)*consecutivePowerDifference 5 m) := by ring
-      _ ≤ (q*q^m)*((f-r-1)*5^m) := Nat.mul_le_mul_left _ hBaseDiff
-      _ = _ := by ring
+    have hScaled : (5^m*q)*((r+q)*consecutivePowerDifference q m) ≤
+        (5^m*q)*((f-r-1)*q^m) := by
+      calc
+        _ = (r+q)*(5^m*q*consecutivePowerDifference q m) := by ring
+        _ ≤ (r+q)*(q^m*5*consecutivePowerDifference 5 m) :=
+          Nat.mul_le_mul_left _ (consecutive_power_difference_scale hq m)
+        _ = (5*(r+q))*(q^m*consecutivePowerDifference 5 m) := by ring
+        _ ≤ (q*(r+5))*(q^m*consecutivePowerDifference 5 m) := Nat.mul_le_mul_right _ hCompare
+        _ = (q*q^m)*((r+5)*consecutivePowerDifference 5 m) := by ring
+        _ ≤ (q*q^m)*((f-r-1)*5^m) := Nat.mul_le_mul_left _ hBaseDiff
+        _ = _ := by ring
+    exact Nat.le_of_mul_le_mul_left hScaled
+      (Nat.mul_pos (pow_pos (by decide : 0 < (5:ℕ)) m) (by omega))
   have hdq : consecutivePowerDifference q m + q^m = (q+1)^m :=
     Nat.sub_add_cancel (pow_le_pow_left' (by omega) m)
-  rw [← hdq, Nat.mul_add, show f+q-1 = (f-r-1)+(r+q) by omega, Nat.add_mul]
+  rw [← hdq, Nat.mul_add, show f+q-1 = (f-r-1)+(r+q) by omega,
+    Nat.add_mul (f-r-1) (r+q) (q^m)]
   exact Nat.add_le_add_right hDiff _
 
 lemma tagged_multiset_numeric_induction {l f m r : ℕ} (hl : 5 ≤ l) (hfr : r+1 ≤ f)
@@ -1477,38 +1481,37 @@ theorem good_medium_coefficients {n k l : ℕ} {a x : ℕ → ℕ} (low high : �
     change k - ((∑ p ∈ H, (k+p-1)/p) + ∑ z ∈ D, (k+z.1*z.2-1)/(z.1*z.2)) ≤ S.card
     omega
   refine ⟨S,hS,hKeep,?_⟩
-  have hChoose : ∀ i : ℕ, ∃ tag : Option Q, i ∈ S → ∀ p : ℕ, p.Prime → p ∉ P →
-      (a i).factorization p = optionalPrimeVal p tag := by
-    intro i
-    by_cases hi : i ∈ S
-    · have hiI := hS hi
-      have haDvd : a i ∣ n+i := ⟨x i^l, hRepr i hiI⟩
-      have hAvoid₁ (p : ℕ) (hp : p ∈ H) : ¬ p ∣ n+i := fun hd =>
-        (mem_sdiff.mp hi).2 (mem_union_left _ (mem_biUnion.mpr ⟨p,hp,mem_filter.mpr ⟨hiI,hd⟩⟩))
-      have hAvoid₂ (z : ℕ × ℕ) (hz : z ∈ D) : ¬ z.1*z.2 ∣ n+i := fun hd =>
-        (mem_sdiff.mp hi).2 (mem_union_right _ (mem_biUnion.mpr ⟨z,hz,mem_filter.mpr ⟨hiI,hd⟩⟩))
-      have hSupp : (a i).primeFactors ⊆ P ∪ Q := by
-        intro p hp
-        have hpK := hSupport i hiI p hp
-        obtain ⟨hpPrime,hpDiv,_⟩ := Nat.mem_primeFactors.mp hp
-        have hpRange := mem_range.mpr hpK
-        by_cases hpL : p ≤ low
-        · exact mem_union_left _ (mem_filter.mpr ⟨hpRange,hpPrime,hpL⟩)
-        · have hpUpper : p ≤ high := by
-            by_contra! hh
-            exact hAvoid₁ p (mem_filter.mpr ⟨hpRange,hpPrime,hh⟩) (hpDiv.trans haDvd)
-          exact mem_union_right _ (mem_filter.mpr ⟨hpRange,hpPrime,by omega,hpUpper⟩)
-      have hAvoid (q : ℕ) (hq : q ∈ Q) (r : ℕ) (hr : r ∈ Q) : ¬ q*r ∣ a i := by
-        intro hd
-        rcases le_total q r with hqr | hrq
-        · exact hAvoid₂ (q,r) (goodD q r hq hr hqr) (hd.trans haDvd)
-        · apply hAvoid₂ (r,q) (goodD r q hr hq hrq)
-          simpa only [Nat.mul_comm] using (hd.trans haDvd)
-      obtain ⟨tag, hTag⟩ := middle_coefficient_tag P Q (ha i hiI) hSupp hpQ hAvoid
-      exact ⟨tag, fun _ => hTag⟩
-    · exact ⟨none, fun h => (hi h).elim⟩
+  have hChoose : ∀ i : S, ∃ tag : Option Q, ∀ p : ℕ, p.Prime → p ∉ P →
+      (a i.val).factorization p = optionalPrimeVal p tag := by
+    rintro ⟨i,hi⟩
+    have hiI := hS hi
+    have haDvd : a i ∣ n+i := ⟨x i^l, hRepr i hiI⟩
+    have hAvoid₁ (p : ℕ) (hp : p ∈ H) : ¬ p ∣ n+i := fun hd =>
+      (mem_sdiff.mp hi).2 (mem_union_left _ (mem_biUnion.mpr ⟨p,hp,mem_filter.mpr ⟨hiI,hd⟩⟩))
+    have hAvoid₂ (z : ℕ × ℕ) (hz : z ∈ D) : ¬ z.1*z.2 ∣ n+i := fun hd =>
+      (mem_sdiff.mp hi).2 (mem_union_right _ (mem_biUnion.mpr ⟨z,hz,mem_filter.mpr ⟨hiI,hd⟩⟩))
+    have hSupp : (a i).primeFactors ⊆ P ∪ Q := by
+      intro p hp
+      have hpK := hSupport i hiI p hp
+      obtain ⟨hpPrime,hpDiv,_⟩ := Nat.mem_primeFactors.mp hp
+      have hpRange := mem_range.mpr hpK
+      by_cases hpL : p ≤ low
+      · exact mem_union_left _ (mem_filter.mpr ⟨hpRange,hpPrime,hpL⟩)
+      · have hpUpper : p ≤ high := by
+          by_contra! hh
+          exact hAvoid₁ p (mem_filter.mpr ⟨hpRange,hpPrime,hh⟩) (hpDiv.trans haDvd)
+        exact mem_union_right _ (mem_filter.mpr ⟨hpRange,hpPrime,by omega,hpUpper⟩)
+    have hAvoid (q : ℕ) (hq : q ∈ Q) (r : ℕ) (hr : r ∈ Q) : ¬ q*r ∣ a i := by
+      intro hd
+      rcases le_total q r with hqr | hrq
+      · exact hAvoid₂ (q,r) (goodD q r hq hr hqr) (hd.trans haDvd)
+      · apply hAvoid₂ (r,q) (goodD r q hr hq hrq)
+        simpa only [Nat.mul_comm] using (hd.trans haDvd)
+    exact middle_coefficient_tag P Q (ha i hiI) hSupp hpQ hAvoid
   choose tag hTag using hChoose
-  exact ⟨tag,hTag⟩
+  refine ⟨fun i => if hi : i ∈ S then tag ⟨i,hi⟩ else none, ?_⟩
+  intro i hi p hp hpP
+  simpa only [dif_pos hi] using hTag ⟨i,hi⟩ p hp hpP
 
 theorem odd_prime_of_medium_certificate {n k l low high f m r : ℕ}
     (hk : 3 ≤ k) (hPrime : l.Prime) (hl : 3 ≤ l)
@@ -1753,5 +1756,125 @@ theorem small_odd_prime_of_sylvester {n k l : ℕ} (hk : 3 ≤ k) (hkUpper : k �
     exact small_cubic_of_sylvester (by omega) hkUpper hSylvester
   · have hNotFour : l ≠ 4 := fun e => (by decide : ¬Nat.Prime 4) (e ▸ hPrime)
     exact small_higher_exponent_of_sylvester (by omega) hkUpper (by omega) hSylvester
+
+private structure MediumBand where
+  lower : ℕ
+  upper : ℕ
+  lowPrime : ℕ
+  highPrime : ℕ
+  deriving DecidableEq
+
+private def mediumOddBands : List MediumBand := [
+  ⟨1001, 1113, 11, 31⟩, ⟨1114, 1235, 11, 31⟩, ⟨1236, 1367, 11, 31⟩,
+  ⟨1368, 1507, 11, 31⟩, ⟨1508, 1662, 11, 37⟩, ⟨1663, 1828, 11, 37⟩,
+  ⟨1829, 2014, 11, 41⟩, ⟨2015, 2223, 11, 43⟩, ⟨2224, 2454, 11, 47⟩,
+  ⟨2455, 2698, 11, 47⟩, ⟨2699, 2953, 11, 47⟩, ⟨2954, 3233, 11, 53⟩,
+  ⟨3234, 3533, 13, 53⟩, ⟨3534, 3860, 13, 59⟩, ⟨3861, 4219, 13, 61⟩,
+  ⟨4220, 4605, 13, 61⟩, ⟨4606, 5024, 13, 67⟩, ⟨5025, 5473, 13, 67⟩,
+  ⟨5474, 5973, 13, 73⟩, ⟨5974, 6502, 13, 73⟩, ⟨6503, 7071, 13, 79⟩,
+  ⟨7072, 7691, 13, 83⟩, ⟨7692, 8345, 13, 83⟩, ⟨8346, 9043, 13, 89⟩,
+  ⟨9044, 9770, 13, 89⟩, ⟨9771, 10544, 13, 97⟩, ⟨10545, 11365, 13, 101⟩,
+  ⟨11366, 12241, 13, 103⟩, ⟨12242, 13183, 13, 109⟩, ⟨13184, 14179, 13, 113⟩,
+  ⟨14180, 15224, 17, 113⟩, ⟨15225, 16325, 17, 113⟩, ⟨16326, 17497, 17, 127⟩,
+  ⟨17498, 18741, 17, 131⟩, ⟨18742, 20047, 17, 131⟩, ⟨20048, 21448, 17, 139⟩,
+  ⟨21449, 22900, 17, 139⟩, ⟨22901, 24439, 17, 151⟩, ⟨24440, 26041, 17, 151⟩,
+  ⟨26042, 27727, 17, 157⟩, ⟨27728, 29474, 17, 163⟩, ⟨29475, 30000, 19, 167⟩
+]
+
+private def intervalEnd : ℕ → List MediumBand → ℕ
+  | start, [] => start
+  | _, band :: rest => intervalEnd (band.upper+1) rest
+
+private def contiguous : ℕ → List MediumBand → Bool
+  | _, [] => true
+  | start, band :: rest =>
+    decide (band.lower = start ∧ band.lower ≤ band.upper) && contiguous (band.upper+1) rest
+
+private lemma cover_contiguous (bands : List MediumBand) {start k : ℕ}
+    (hC : contiguous start bands = true) (hLo : start ≤ k) (hHi : k < intervalEnd start bands) :
+    ∃ band ∈ bands, band.lower ≤ k ∧ k ≤ band.upper := by
+  induction bands generalizing start with
+  | nil =>
+    simp only [intervalEnd] at hHi
+    omega
+  | cons band rest ih =>
+    simp only [contiguous, Bool.and_eq_true, decide_eq_true_eq] at hC
+    by_cases hB : k ≤ band.upper
+    · exact ⟨band, by simp, by omega, hB⟩
+    · obtain ⟨other, ho, hL, hU⟩ := ih (start := band.upper+1) hC.2 (by omega) hHi
+      exact ⟨other, by simp [ho], hL, hU⟩
+
+private lemma medium_band_cover {k : ℕ} (hk : 1001 ≤ k) (hkU : k ≤ 30000) :
+    ∃ band ∈ mediumOddBands, band.lower ≤ k ∧ k ≤ band.upper :=
+  cover_contiguous mediumOddBands (by decide) hk (by
+    change k < 30001
+    omega)
+
+private abbrev medium_band_numeric_goal (band : MediumBand) : Prop :=
+  let F := band.lower -
+    ((∑ p ∈ highPrimes band.upper band.highPrime, (band.upper+p-1)/p) +
+      ∑ z ∈ orderedMiddlePairs band.upper band.lowPrime band.highPrime,
+        (band.upper+z.1*z.2-1)/(z.1*z.2))
+  let M := (lowPrimes band.upper band.lowPrime).card
+  let R := (middlePrimes band.upper band.lowPrime band.highPrime).card
+  3^M*(R+1)^2 < F*(F-1) ∧ R+1 ≤ F ∧ 5^M*(R+4).choose 4 < (F+3).choose 4 ∧
+    (R+5)*6^M ≤ (F+4)*5^M
+
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+private lemma medium_band_numeric : ∀ band ∈ mediumOddBands, medium_band_numeric_goal band := by
+  decide
+
+theorem medium_odd_prime_of_sylvester {n k l : ℕ} (hk : 1001 ≤ k) (hkU : k ≤ 30000)
+    (hPrime : l.Prime) (hl : 3 ≤ l)
+    (hSylvester : ∃ p : ℕ, p.Prime ∧ k < p ∧ p ∣ ∏ t ∈ Ioc n (n+k), t) :
+    ∃ p : ℕ, k ≤ p ∧ p.Prime ∧ ¬ l ∣ (∏ t ∈ Ioc n (n+k), t).factorization p := by
+  obtain ⟨band, hBand, hLo, hHi⟩ := medium_band_cover hk hkU
+  have hNumeric := medium_band_numeric band hBand
+  unfold medium_band_numeric_goal at hNumeric
+  dsimp only at hNumeric
+  let low := band.lowPrime
+  let high := band.highPrime
+  let M := (lowPrimes band.upper low).card
+  let R := (middlePrimes band.upper low high).card
+  let F := band.lower -
+    ((∑ p ∈ highPrimes band.upper high, (band.upper+p-1)/p) +
+      ∑ z ∈ orderedMiddlePairs band.upper low high, (band.upper+z.1*z.2-1)/(z.1*z.2))
+  have hLow : lowPrimes k low ⊆ lowPrimes band.upper low := by
+    intro p hp
+    rcases mem_filter.mp hp with ⟨hpK,ht⟩
+    exact mem_filter.mpr ⟨mem_range.mpr ((mem_range.mp hpK).trans_le hHi), ht⟩
+  have hMid : middlePrimes k low high ⊆ middlePrimes band.upper low high := by
+    intro p hp
+    rcases mem_filter.mp hp with ⟨hpK,ht⟩
+    exact mem_filter.mpr ⟨mem_range.mpr ((mem_range.mp hpK).trans_le hHi), ht⟩
+  have hHigh : highPrimes k high ⊆ highPrimes band.upper high := by
+    intro p hp
+    rcases mem_filter.mp hp with ⟨hpK,ht⟩
+    exact mem_filter.mpr ⟨mem_range.mpr ((mem_range.mp hpK).trans_le hHi), ht⟩
+  have hPair : orderedMiddlePairs k low high ⊆ orderedMiddlePairs band.upper low high := by
+    intro z hz
+    rcases mem_filter.mp hz with ⟨hz',hZ⟩
+    exact mem_filter.mpr ⟨mem_product.mpr ⟨hMid (mem_product.mp hz').1,
+      hMid (mem_product.mp hz').2⟩, hZ⟩
+  have hSum₁ : (∑ p ∈ highPrimes k high, (k+p-1)/p) ≤
+      ∑ p ∈ highPrimes band.upper high, (band.upper+p-1)/p := by
+    calc
+      _ ≤ ∑ p ∈ highPrimes k high, (band.upper+p-1)/p :=
+        sum_le_sum (fun p _ => Nat.div_le_div_right (by omega))
+      _ ≤ _ := sum_le_sum_of_subset_of_nonneg hHigh (fun _ _ _ => Nat.zero_le _)
+  have hSum₂ : (∑ z ∈ orderedMiddlePairs k low high, (k+z.1*z.2-1)/(z.1*z.2)) ≤
+      ∑ z ∈ orderedMiddlePairs band.upper low high, (band.upper+z.1*z.2-1)/(z.1*z.2) := by
+    calc
+      _ ≤ ∑ z ∈ orderedMiddlePairs k low high, (band.upper+z.1*z.2-1)/(z.1*z.2) :=
+        sum_le_sum (fun z _ => Nat.div_le_div_right (by omega))
+      _ ≤ _ := sum_le_sum_of_subset_of_nonneg hPair (fun _ _ _ => Nat.zero_le _)
+  have hF : F ≤ mediumLowerBound k low high := by
+    dsimp only [F,mediumLowerBound]
+    omega
+  exact odd_prime_of_medium_certificate (by omega) hPrime hl hSylvester hF
+    (show (lowPrimes k low).card ≤ M from card_le_card hLow)
+    (show (middlePrimes k low high).card ≤ R from card_le_card hMid)
+    hNumeric.1 hNumeric.2.1 hNumeric.2.2.1 hNumeric.2.2.2
 
 end Erdos137PerfectPower

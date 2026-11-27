@@ -56,5 +56,5 @@ jobs:
           printf '\nend Erdos137PerfectPower\n' >> H3OddGeneric.lean
           timeout 120 lake env lean H3OddGeneric.lean
           cp ../verification/H3_odd_prime.lean H3OddAudit.lean
-          printf '\n#print axioms Erdos137PerfectPower.distinct_pair_products_mod_l\n#print axioms Erdos137PerfectPower.distinct_multiset_products_mod_l\n#print axioms Erdos137PerfectPower.restricted_prod_dvd_factorial\n#print axioms Erdos137PerfectPower.three_odd_exponent_of_sylvester\n#print axioms Erdos137PerfectPower.factor_cover_card_of_distinct_products\n#print axioms Erdos137PerfectPower.small_odd_prime_of_sylvester\n#print axioms Erdos137PerfectPower.odd_prime_of_medium_certificate\n#print axioms Erdos137PerfectPower.odd_branch_of_coefficient_product_bound\n' >> H3OddAudit.lean
-          timeout 720 lake env lean H3OddAudit.lean
+          printf '\n#print axioms Erdos137PerfectPower.distinct_pair_products_mod_l\n#print axioms Erdos137PerfectPower.distinct_multiset_products_mod_l\n#print axioms Erdos137PerfectPower.restricted_prod_dvd_factorial\n#print axioms Erdos137PerfectPower.three_odd_exponent_of_sylvester\n#print axioms Erdos137PerfectPower.factor_cover_card_of_distinct_products\n#print axioms Erdos137PerfectPower.small_odd_prime_of_sylvester\n#print axioms Erdos137PerfectPower.odd_prime_of_medium_certificate\n#print axioms Erdos137PerfectPower.odd_branch_of_coefficient_product_bound\n#print axioms Erdos137PerfectPower.medium_odd_prime_of_sylvester\n' >> H3OddAudit.lean
+          timeout 1200 lake env lean H3OddAudit.lean
