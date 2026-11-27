@@ -1039,7 +1039,7 @@ private structure FactorCoverRow where
   deriving DecidableEq
 
 private def rightFactors (B L : ℕ) : Finset ℕ :=
-  (Ioc 0 B).filter fun t => ∀ p ∈ range (B+1), p.Prime → p ∣ t → p ≤ L
+  (Ioc 0 B).filter fun t => ∀ p ∈ range (B+1), p ∣ t → p.Prime → p ≤ L
 
 private def leftFactorsForRow (row : FactorCoverRow) (x : ℕ) : Finset ℕ :=
   (coprimePrefix row.period (x/(row.prime*row.minDiv))).image (row.prime*·)
@@ -1133,11 +1133,10 @@ private lemma graph_density_from_rows (rows : Finset FactorCoverRow)
       (a=c ∧ b=d) ∨ (a=d ∧ b=c))
     (hRows : ∀ row ∈ rows, rowValid row)
     (hBase : ∃ row ∈ rows, row.prime = 1 ∧ row.minDiv = 1 ∧
-      ∀ p ∈ range (row.period+1), p.Prime → p ∣ row.period → p ≤ L)
+      ∀ p ∈ range (row.period+1), p ∣ row.period → p.Prime → p ≤ L)
     (hNext : ∀ p ∈ (range (L+1)).filter Nat.Prime, ∃ row ∈ rows, row.prime = p ∧
-      (∀ q ∈ range (row.period+1), q.Prime → q ∣ row.period → q < p) ∧
-      ∀ v ∈ rightFactors B L, B < v*p →
-        (∀ q ∈ range (B+1), q.Prime → q ∣ v → q ≤ p) → row.minDiv ≤ v)
+      (∀ q ∈ range (row.period+1), q ∣ row.period → q.Prime → q < p) ∧
+      ∀ v ∈ Ioo (B/p) row.minDiv, ∃ q ∈ range (B+1), p < q ∧ q ∣ v ∧ q.Prime)
     (hDensity : (∑ row ∈ rows, rowDensity row) ≤ (A:ℚ)/C)
     (hError : ((rightFactors B L).card.choose 2 : ℚ) +
       (∑ row ∈ rows, rowError row) ≤ E) :
@@ -1148,7 +1147,7 @@ private lemma graph_density_from_rows (rows : Finset FactorCoverRow)
   have hCover : ∀ t ∈ S, ∃ u ∈ U, ∃ v ∈ V, t = u*v := by
     intro t ht
     obtain ⟨u,v,he,hu,hv,hvB,hSupport,hEnd⟩ := greedy_small_factor B L t hB (hS t ht).1
-    have hvV : v ∈ V := mem_filter.mpr ⟨mem_Ioc.mpr ⟨hv,hvB⟩,fun p _ hp hd =>
+    have hvV : v ∈ V := mem_filter.mpr ⟨mem_Ioc.mpr ⟨hv,hvB⟩,fun p _ hd hp =>
       hSupport p (Nat.mem_primeFactors.mpr ⟨hp,hd,hv.ne'⟩)⟩
     have hSize : u*v ≤ x := he ▸ (hS t ht).2
     refine ⟨u, ?_, v,hvV,he⟩
@@ -1162,7 +1161,7 @@ private lemma graph_density_from_rows (rows : Finset FactorCoverRow)
         apply Nat.coprime_of_dvd
         intro p hp hd huD
         have hBound := Nat.le_of_dvd (hRows base hbRows).2.2.1 hd
-        have hP := hbFactors p (mem_range.mpr (by omega)) hp hd
+        have hP := hbFactors p (mem_range.mpr (by omega)) hd hp
         have hMin := Nat.minFac_le_of_dvd hp.two_le huD
         omega
       exact mem_biUnion.mpr ⟨base,hbRows,left_factor_mem (hRows base hbRows) hu
@@ -1180,7 +1179,7 @@ private lemma graph_density_from_rows (rows : Finset FactorCoverRow)
             apply Nat.coprime_of_dvd
             intro r hr hd huD
             have hBound := Nat.le_of_dvd (hRows base hbRows).2.2.1 hd
-            have hP := hbFactors r (mem_range.mpr (by omega)) hr hd
+            have hP := hbFactors r (mem_range.mpr (by omega)) hd hr
             have hMin : p ≤ r := Nat.minFac_le_of_dvd hr.two_le huD
             omega
           exact mem_biUnion.mpr ⟨base,hbRows,left_factor_mem (hRows base hbRows) hu
@@ -1193,11 +1192,16 @@ private lemma graph_density_from_rows (rows : Finset FactorCoverRow)
             apply Nat.coprime_of_dvd
             intro r hr hd hrU
             have hBound := Nat.le_of_dvd (hRows row hrRows).2.2.1 hd
-            have hP := hrFactors r (mem_range.mpr (by omega)) hr hd
+            have hP := hrFactors r (mem_range.mpr (by omega)) hd hr
             have hMin : p ≤ r := Nat.minFac_le_of_dvd hr.two_le (hrU.trans (Nat.div_dvd_of_dvd hPDvd))
             omega
-          exact mem_biUnion.mpr ⟨row,hrRows,left_factor_mem (hRows row hrRows) hu
-            (hrMin v hvV hOver (fun q _ hq hd => hSorted q (Nat.mem_primeFactors.mpr ⟨hq,hd,hv.ne'⟩)))
+          have hVMin : row.minDiv ≤ v := by
+            by_contra! hVSmall
+            have hVDiv : B/p < v := (Nat.div_lt_iff_lt_mul hp.pos).2 hOver
+            obtain ⟨q,_,hQ,hd,hpQ⟩ := hrMin v (mem_Ioo.mpr ⟨hVDiv,hVSmall⟩)
+            have hQ' := hSorted q (Nat.mem_primeFactors.mpr ⟨hpQ,hd,hv.ne'⟩)
+            omega
+          exact mem_biUnion.mpr ⟨row,hrRows,left_factor_mem (hRows row hrRows) hu hVMin
             hSize hPDvd hCop⟩
   have hGraph := factor_cover_card_of_distinct_products S U V hCover hSidon
   have hCards : U.card ≤ ∑ row ∈ rows, (leftFactorsForRow row x).card := card_biUnion_le
